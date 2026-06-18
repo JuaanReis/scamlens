@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/style.css">
+  <title>scurl-api</title>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <a href="#" class="logo-text" id="link">scurl_api</a>
+    <div class="tagline"><span id="desc">Referência Técnica de Integração</span> - Versão <span id="version"></span></div>
+  </header>
+
+  <nav>
+    <a href="#intro">Visão Geral</a>
+    <a href="#endpoints">Endpoints</a>
+    <a href="#schemas">Schemas</a>
+    <a href="#status">Status/Erros</a>
+  </nav>
+
+  <!-- Why is he wearing a mask? -->
+
+  <div class="main-content">
+
+    <section id="intro">
+      <h1>Referência da API</h1>
+      <p>Base URL para todas as requisições: <code>https://scurl.vercel.app</code></p>
+
+      <h3>Autenticação & Limites</h3>
+      <p>A API é pública e não requer tokens de acesso. O controle é feito via <b>Rate Limiting</b> por endereço IP.</p>
+
+      <table class="data-table">
+        <tr>
+          <th width="150">Recurso</th>
+          <th>Configuração / Resposta</th>
+        </tr>
+        <tr>
+          <td>Rate Limit</td>
+          <td>Configurável via <code>config["rate_limit"]</code>. Retorna <span class="highlight">429 Too Many Requests</span> se excedido.</td>
+        </tr>
+        <tr>
+          <td>Concorrência</td>
+          <td>Máximo de <b>20 scans simultâneos</b>. Retorna <span class="highlight">503 Service Unavailable</span> se o limite for atingido sem enfileiramento.</td>
+        </tr>
+      </table>
+    </section>
+
+    <section id="endpoints">
+      <h2>Endpoints Disponíveis</h2>
+
+      <h3>POST /analyze</h3>
+      <p>Executa um scan heurístico completo em uma URL.</p>
+
+      <h4>Request Body (JSON)</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Obrigatório</th><th>Descrição</th></tr>
+        <tr><td>url</td><td>HttpUrl</td><td>Sim</td><td>URL alvo. Validada pelo Pydantic.</td></tr>
+        <tr><td>use_cache</td><td>bool</td><td>Não</td><td>Se <code>true</code>, busca resultado anterior no SQLite antes de escanear. Default: <code>false</code>.</td></tr>
+      </table>
+
+      <pre>
+POST /analyze
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "use_cache": false
+}</pre>
+
+      <h4>Response 200 OK</h4>
+      <pre>
+{
+  "scan": { ... },
+  "target": { ... }
+}</pre>
+
+      <h4>Erros</h4>
+      <table class="data-table">
+        <tr><th>Status</th><th>Condição</th></tr>
+        <tr><td><span class="highlight">400</span></td><td>Engine retornou <code>status: "error"</code></td></tr>
+        <tr><td><span class="highlight">422</span></td><td>URL inválida (Pydantic)</td></tr>
+        <tr><td><span class="highlight">429</span></td><td>Rate limit excedido</td></tr>
+        <tr><td><span class="highlight">503</span></td><td>20 scans já em execução</td></tr>
+      </table>
+
+      <h3>GET /scans</h3>
+      <p>Lista scans armazenados no banco (requer cache ativo nas execuções).</p>
+
+      <h4>Query Parameters</h4>
+      <table class="data-table">
+        <tr><th>Parâmetro</th><th>Tipo</th><th>Padrão</th><th>Limites</th></tr>
+        <tr><td>limit</td><td>int</td><td>50</td><td>1–200</td></tr>
+        <tr><td>offset</td><td>int</td><td>0</td><td>&gt;= 0</td></tr>
+      </table>
+
+      <h4>Response 200 OK</h4>
+      <pre>
+{
+  "status": "ok",
+  "total": 2,
+  "scans": [
+    {
+      "url": "https://example.com",
+      "score": 12.4,
+      "risk_level": "low",
+      "verdict": "safe",
+      "scan_id": "abc123",
+      "timestamp": "2026-05-19T03:01:58.423324+00:00",
+      "url_hash": "e1d5e2c7..."
+    }
+  ]
+}</pre>
+
+      <h3>GET /scans/{identifier}</h3>
+      <p>Retorna um scan completo por <code>scan_id</code> (UUID hex) ou <code>url_hash</code> (SHA-256 hex).</p>
+
+      <h4>Path Parameter</h4>
+      <table class="data-table">
+        <tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>identifier</td><td>str</td><td><code>scan_id</code> (UUID hex) ou <code>url_hash</code> (SHA-256 hex)</td></tr>
+      </table>
+
+      <h4>Erros</h4>
+      <table class="data-table">
+        <tr><th>Status</th><th>Condição</th></tr>
+        <tr><td><span class="highlight">404</span></td><td>Identifier não encontrado no banco</td></tr>
+      </table>
+
+      <h3>GET /health</h3>
+      <p>Health check do serviço.</p>
+      <pre>
+{
+  "status": "ok",
+  "version": "1.0.9"
+}</pre>
+    </section>
+
+    <section id="schemas">
+      <h2>Schemas de Resposta</h2>
+
+      <h3>ScanResponse</h3>
+      <p>Objeto principal retornado após uma análise bem-sucedida.</p>
+      <pre>
+{
+  "status": "ok",
+  "engine": {
+    "name": "scurl",
+    "version": "1.0.9"
+  },
+  "meta": {
+    "scan_id": "13b0b10d192544f88b29755f7d9fbf16",
+    "scan_time_s": 0.911,
+    "url_hash": "e1d5e2c7...",
+    "url": "https://youtube.com/",
+    "threads": 2,
+    "timestamp": "2026-05-19T03:01:58.423324+00:00"
+  },
+  "result": {
+    "score": 7.8,
+    "risk_level": "very low",
+    "verdict": "safe"
+  },
+  "stats": {
+    "rules_total": 36,
+    "rules_triggered": 3,
+    "trigger_rate": 0.083
+  },
+  "heuristics": [ ... ],
+  "insight": []
+}</pre>
+
+      <h4>Escala de Risco (result.risk_level)</h4>
+      <table class="data-table" style="width: 350px;">
+        <tr><th>Score</th><th>Nível de Risco</th></tr>
+        <tr><td>0 – 20</td><td><code>very low</code></td></tr>
+        <tr><td>21 – 40</td><td><code>low</code></td></tr>
+        <tr><td>41 – 60</td><td><code>medium</code></td></tr>
+        <tr><td>61 – 80</td><td><code>high</code></td></tr>
+        <tr><td>81 – 100</td><td><code>very high</code></td></tr>
+      </table>
+
+      <h4>heuristics[]</h4>
+      <p>Cada item representa uma regra que produziu resultado. Regras que retornam <code>None</code> não aparecem na lista.</p>
+      <pre>
+{
+  "name": "ssl_score",
+  "category": "server",
+  "value": 0.0,
+  "weight": 3.5,
+  "contribution": 0.0,
+  "details": { ... },
+  "reasons": ["..."]
+}</pre>
+
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>name</td><td>str</td><td>Identificador da regra</td></tr>
+        <tr><td>category</td><td>str</td><td><code>server</code>, <code>html</code>, <code>url</code>, <code>domain</code></td></tr>
+        <tr><td>value</td><td>float</td><td>Score bruto da regra (0.0–1.0)</td></tr>
+        <tr><td>weight</td><td>float</td><td>Peso da regra no pipeline</td></tr>
+        <tr><td>contribution</td><td>float</td><td>Contribuição ponderada no score final</td></tr>
+        <tr><td>details</td><td>dict</td><td>Dados coletados pela regra (varia por regra)</td></tr>
+        <tr><td>reasons</td><td>list[str]</td><td>Explicações geradas pela regra</td></tr>
+      </table>
+
+      <h3>TargetResponse (Dados Coletados)</h3>
+      <p>Dados coletados sobre o alvo. Dividido em 6 seções.</p>
+
+      <h4>1. Identity (URL & Domínio)</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>original_url</td><td>str</td><td>URL como fornecida</td></tr>
+        <tr><td>final_url</td><td>str|null</td><td>URL após redirecionamentos</td></tr>
+        <tr><td>scheme</td><td>str</td><td><code>http</code> ou <code>https</code></td></tr>
+        <tr><td>hostname</td><td>str</td><td>Host extraído</td></tr>
+        <tr><td>registered_domain</td><td>str</td><td>Domínio registrado (ex: <code>youtube.com</code>)</td></tr>
+        <tr><td>tld</td><td>str</td><td>TLD (ex: <code>com</code>)</td></tr>
+        <tr><td>subdomains</td><td>list[str]</td><td>Lista de subdomínios</td></tr>
+        <tr><td>subdomain_count</td><td>int</td><td>Quantidade de subdomínios</td></tr>
+        <tr><td>port</td><td>int|null</td><td>Porta explícita na URL</td></tr>
+        <tr><td>path</td><td>str</td><td>Path da URL</td></tr>
+        <tr><td>query</td><td>str</td><td>Query string</td></tr>
+        <tr><td>fragment</td><td>str</td><td>Fragment (<code>#...</code>)</td></tr>
+        <tr><td>normalized_url</td><td>str</td><td>URL normalizada</td></tr>
+        <tr><td>punycode</td><td>str</td><td>Domínio em punycode</td></tr>
+        <tr><td>unicode_domain</td><td>str</td><td>Domínio em unicode</td></tr>
+        <tr><td>is_idn</td><td>bool</td><td>Internationalized Domain Name</td></tr>
+        <tr><td>is_homograph</td><td>bool</td><td>Ataque homograph detectado</td></tr>
+        <tr><td>domain_length</td><td>int</td><td>Comprimento do domínio</td></tr>
+        <tr><td>domain_entropy</td><td>float</td><td>Entropia de Shannon do domínio</td></tr>
+        <tr><td>url_length</td><td>int</td><td>Comprimento total da URL</td></tr>
+        <tr><td>has_ip</td><td>bool</td><td>URL contém IP em vez de domínio</td></tr>
+        <tr><td>has_port</td><td>bool</td><td>URL contém porta explícita</td></tr>
+      </table>
+
+      <h4>2. Network & DNS</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>ipv4</td><td>list[str]</td><td>Endereços IPv4 resolvidos</td></tr>
+        <tr><td>ipv6</td><td>list[str]</td><td>Endereços IPv6 resolvidos</td></tr>
+        <tr><td>reverse_dns</td><td>str|null</td><td>PTR record</td></tr>
+        <tr><td>asn</td><td>{number, organization}|null</td><td>Autonomous System Number</td></tr>
+        <tr><td>geo</td><td>{country, region, city}|null</td><td>Geolocalização</td></tr>
+        <tr><td>isp</td><td>str|null</td><td>Provedor de internet</td></tr>
+        <tr><td>cdn</td><td>{detected, provider}|null</td><td>CDN detectado</td></tr>
+        <tr><td>waf</td><td>{detected, provider}|null</td><td>WAF detectado</td></tr>
+        <tr><td>http_version</td><td>str|null</td><td>Versão HTTP (ex: <code>HTTP/2</code>)</td></tr>
+        <tr><td>timings</td><td>Timings</td><td>Breakdown de latência em ms</td></tr>
+      </table>
+
+      <h4>Timings</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Descrição</th></tr>
+        <tr><td>total_ms</td><td>Tempo total da requisição</td></tr>
+        <tr><td>dns_ms</td><td>Tempo de resolução DNS</td></tr>
+        <tr><td>tcp_ms</td><td>Tempo de handshake TCP</td></tr>
+        <tr><td>tls_ms</td><td>Tempo de handshake TLS</td></tr>
+        <tr><td>ttfb_ms</td><td>Time to First Byte</td></tr>
+      </table>
+
+      <h4>3. TLS</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>enabled</td><td>bool</td><td>HTTPS ativo</td></tr>
+        <tr><td>version</td><td>str|null</td><td>Ex: <code>TLSv1.3</code></td></tr>
+        <tr><td>cipher_suite</td><td>str|null</td><td>Ex: <code>TLS_AES_256_GCM_SHA384</code></td></tr>
+        <tr><td>issuer</td><td>str|null</td><td>Nome curto da CA</td></tr>
+        <tr><td>issuer_detail</td><td>dict|null</td><td><code>countryName</code>, <code>organizationName</code>, <code>commonName</code></td></tr>
+        <tr><td>subject</td><td>str|null</td><td>CN do certificado</td></tr>
+        <tr><td>valid_from</td><td>str|null</td><td>Data início (<code>YYYY-MM-DD</code>)</td></tr>
+        <tr><td>valid_until</td><td>str|null</td><td>Data expiração (<code>YYYY-MM-DD</code>)</td></tr>
+        <tr><td>validity_days</td><td>int|null</td><td>Validade total em dias</td></tr>
+        <tr><td>san</td><td>list[str]</td><td>Subject Alternative Names</td></tr>
+        <tr><td>san_count</td><td>int</td><td>Quantidade de SANs</td></tr>
+        <tr><td>wildcard</td><td>bool</td><td>Certificado wildcard</td></tr>
+        <tr><td>self_signed</td><td>bool</td><td>Certificado auto-assinado</td></tr>
+        <tr><td>serial_number</td><td>str|null</td><td>Serial hex</td></tr>
+        <tr><td>signature_algorithm</td><td>str|null</td><td>Ex: <code>SHA256</code></td></tr>
+        <tr><td>public_key_algorithm</td><td>str|null</td><td>Ex: <code>EC-secp256r1</code></td></tr>
+        <tr><td>ocsp_stapling</td><td>bool|null</td><td>OCSP stapling ativo</td></tr>
+        <tr><td>ocsp_reachable</td><td>bool|null</td><td>OCSP responder acessível</td></tr>
+        <tr><td>fingerprints</td><td>{sha1, sha256}|null</td><td>Fingerprints do certificado</td></tr>
+      </table>
+
+      <h4>4. DNS</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>a</td><td>list[str]</td><td>Records A</td></tr>
+        <tr><td>aaaa</td><td>list[str]</td><td>Records AAAA</td></tr>
+        <tr><td>mx</td><td>list[{priority, host}]</td><td>Records MX</td></tr>
+        <tr><td>ns</td><td>list[str]</td><td>Nameservers</td></tr>
+        <tr><td>cname</td><td>list[str]</td><td>Records CNAME</td></tr>
+        <tr><td>txt</td><td>list[str]</td><td>Records TXT</td></tr>
+        <tr><td>spf</td><td>bool</td><td>SPF configurado</td></tr>
+        <tr><td>dmarc</td><td>bool</td><td>DMARC configurado</td></tr>
+        <tr><td>dkim</td><td>bool|null</td><td>DKIM detectado</td></tr>
+        <tr><td>ttl</td><td>int|null</td><td>TTL em segundos</td></tr>
+        <tr><td>has_mx</td><td>bool</td><td>MX record presente</td></tr>
+      </table>
+
+      <h4>5. HTTP</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>status_code</td><td>int|null</td><td>HTTP status da resposta final</td></tr>
+        <tr><td>response_time_s</td><td>float|null</td><td>Tempo de resposta em segundos</td></tr>
+        <tr><td>redirects</td><td>int</td><td>Número de redirecionamentos</td></tr>
+        <tr><td>redirect_chain</td><td>list[{url, status, location}]|null</td><td>Cadeia de redirecionamentos</td></tr>
+        <tr><td>content_type</td><td>str|null</td><td>Content-Type header</td></tr>
+        <tr><td>content_length</td><td>int|null</td><td>Tamanho do body em bytes</td></tr>
+        <tr><td>encoding</td><td>str|null</td><td>Content-Encoding</td></tr>
+        <tr><td>compression</td><td>{enabled, algorithm}|null</td><td>Compressão usada</td></tr>
+        <tr><td>server</td><td>str|null</td><td>Server header</td></tr>
+        <tr><td>alt_svc</td><td>str|null</td><td>Alt-Svc header (HTTP/3)</td></tr>
+        <tr><td>keep_alive</td><td>bool</td><td>Keep-Alive ativo</td></tr>
+        <tr><td>security_headers</td><td>dict[str, str]</td><td>Headers de segurança presentes</td></tr>
+        <tr><td>cookies</td><td>any|null</td><td>Cookies da resposta</td></tr>
+      </table>
+
+      <h4>6. Content (Análise HTML)</h4>
+      <p>Campos zerados em SPAs que não renderizam server-side.</p>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>title</td><td>str|null</td><td>Tag <code>&lt;title&gt;</code></td></tr>
+        <tr><td>language</td><td>str|null</td><td>Atributo <code>lang</code> do <code>&lt;html&gt;</code></td></tr>
+        <tr><td>html_size_kb</td><td>float</td><td>Tamanho do HTML em KB</td></tr>
+        <tr><td>scripts</td><td>{total, external, inline}</td><td>Contagem de scripts</td></tr>
+        <tr><td>stylesheets</td><td>int</td><td>Contagem de <code>&lt;link rel="stylesheet"&gt;</code></td></tr>
+        <tr><td>iframes</td><td>int</td><td>Contagem de <code>&lt;iframe&gt;</code></td></tr>
+        <tr><td>forms</td><td>{count, password_fields}</td><td>Formulários e campos senha</td></tr>
+        <tr><td>inputs</td><td>int</td><td>Total de <code>&lt;input&gt;</code></td></tr>
+        <tr><td>images</td><td>int</td><td>Total de <code>&lt;img&gt;</code></td></tr>
+        <tr><td>anchors</td><td>int</td><td>Total de <code>&lt;a&gt;</code></td></tr>
+        <tr><td>favicon</td><td>str|null</td><td>URL do favicon</td></tr>
+        <tr><td>canonical</td><td>str|null</td><td>URL canonical</td></tr>
+        <tr><td>meta_tags</td><td>dict[str, str|null]</td><td>Meta tags relevantes</td></tr>
+        <tr><td>generator</td><td>str|null</td><td>Meta generator (ex: WordPress)</td></tr>
+        <tr><td>spa</td><td>bool</td><td>Site detectado como SPA</td></tr>
+        <tr><td>html_sha256</td><td>str|null</td><td>Hash do HTML para comparação</td></tr>
+      </table>
+
+      <h4>7. Domain</h4>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>registrar</td><td>str|null</td><td>Registrar do domínio</td></tr>
+        <tr><td>created_at</td><td>str|null</td><td>Data de criação (<code>YYYY-MM-DD</code>)</td></tr>
+        <tr><td>updated_at</td><td>str|null</td><td>Última atualização</td></tr>
+        <tr><td>expires_at</td><td>str|null</td><td>Data de expiração</td></tr>
+        <tr><td>age_days</td><td>int|null</td><td>Idade do domínio em dias</td></tr>
+        <tr><td>status</td><td>list[str]</td><td>Status EPP do domínio</td></tr>
+      </table>
+    </section>
+
+    <section id="status">
+      <h2>Códigos de Erro</h2>
+      <table class="data-table">
+        <tr><th>Status</th><th>Significado</th></tr>
+        <tr><td><span class="highlight">400</span></td><td>Falha interna na engine de análise (<code>status: "error"</code>)</td></tr>
+        <tr><td><span class="highlight">422</span></td><td>URL malformada ou inválida (Pydantic)</td></tr>
+        <tr><td><span class="highlight">429</span></td><td>Rate limit excedido</td></tr>
+        <tr><td><span class="highlight">503</span></td><td>20 scans simultâneos em execução</td></tr>
+        <tr><td><span class="highlight">404</span></td><td>ID ou Hash não encontrado no banco de dados</td></tr>
+      </table>
+
+      <h3>ErrorResponse</h3>
+      <p>Retornado com <span class="highlight">400</span> quando o engine falha internamente.</p>
+      <pre>
+{
+  "status": "error",
+  "meta": {
+    "url": "https://example.com",
+    "scan_time_s": 0.12,
+    "version": "1.0.9"
+  },
+  "error": {
+    "type": "connection_error",
+    "message": "..."
+  }
+}</pre>
+
+      <h3>Exemplo completo</h3>
+      <pre>
+curl -X POST https://scurl.vercel.app/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "use_cache": false}'</pre>
+    </section>
+
+  </div>
+
+  <footer>
+    scurl v1.0.9 - Structural and contextual URL risk locator<br>
+    Documentação gerada para uso técnico e acadêmico (2026).<br>
+    <a href="https://github.com/JuaanReis/scurl">Visitar repositório oficial</a>
+    <br>
+    <span id="message"></span>
+  </footer>
+</div>
+
+</body>
+<script src="/static/script.js"></script>
+</html>
+<!-- ?????????a -->

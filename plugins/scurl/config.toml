@@ -1,0 +1,16 @@
+[scanner]
+timeout = 6.0
+threads = 2
+k = 5
+retries = 3
+follow_redirects = true
+verify_ssl = true
+http2 = false
+cache = true
+
+[output]
+colors = true
+
+[security]
+allow_private_ips = false
+allow_localhost = false

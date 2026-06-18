@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scamlens"
+version = "1.0.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "cryptography==48.0.0",
+    "fastapi==0.136.1",
+    "httpx==0.28.1",
+    "ipwhois==1.3.0",
+    "pydantic==2.13.4",
+    "selectolax==0.4.7",
+    "slowapi==0.1.9",
+    "tldextract==5.3.1",
+    "uvicorn==0.47.0",
+    "colorama>=0.4.6",
+    "tomli>=2.0.1; python_version < '3.11'",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+scurl = "modules.scurl.cli.main:main"
+scamlens-api = "api.server:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "modules*",
+    "api*",
+    "providers*",
+    "scamLens*",
+]
+
+[tool.setuptools.package-data]
+"scamLens" = ["config.toml"]
+"modules.scurl" = ["config.toml"]
+"providers.database" = ["schema/*.sql", "storage/*.db"]
+api = ["static/*"]
