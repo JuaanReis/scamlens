@@ -2,7 +2,8 @@
 host = "0.0.0.0"
 port = 8000
 workers = 1
-reload = true
+reload = false
+logs = true
 
 [cors]
 enabled = true
@@ -12,8 +13,7 @@ expose_headers = []
 allow_methods = ["*"]
 allow_headers = ["*"]
 allow_origins = [
-    "http://localhost:5173",
-    "http://localhost:3000"
+    "http://localhost:8000"
 ]
 
 [cache]
@@ -22,3 +22,11 @@ enabled = true
 [rate_limit]
 enabled = true
 requests_per_minute = 10
+
+[cookies]
+secure = true
+samesite = "lax"
+httponly = true
+
+[logging]
+trust_proxy = false

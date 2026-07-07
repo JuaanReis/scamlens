@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS plans (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL UNIQUE,  -- standard | go_pro | plus_premium
+    name        TEXT    NOT NULL UNIQUE, 
     label       TEXT    NOT NULL,
-    price       INTEGER NOT NULL,         -- em centavos (0, 4900, 19900)
+    price       INTEGER NOT NULL,        
     created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 

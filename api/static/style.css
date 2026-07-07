@@ -17,6 +17,7 @@ a, button, input[type="submit"], input[type="button"], label[for], summary {
   background: #c0c0c0;
   border-left: 1px solid #808080;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #c0c0c0;
   border-top: 2px solid #fff;
@@ -24,6 +25,7 @@ a, button, input[type="submit"], input[type="button"], label[for], summary {
   border-right: 2px solid #404040;
   border-bottom: 2px solid #404040;
 }
+
 ::-webkit-scrollbar-button:vertical:start:decrement {
   display: block;
   height: 16px;
@@ -35,6 +37,7 @@ a, button, input[type="submit"], input[type="button"], label[for], summary {
   border-right: 2px solid #404040;
   border-bottom: 2px solid #404040;
 }
+
 ::-webkit-scrollbar-button:vertical:end:increment {
   display: block;
   height: 16px;

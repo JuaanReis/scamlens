@@ -9,17 +9,20 @@ logger = logging.getLogger(__name__)
 
 def extract_redirect_chain(response) -> list:
     chain = []
+    
     for r in response.history:
         chain.append({
             "url": str(r.url),
             "status": r.status_code,
             "location": r.headers.get("location")
         })
+
     chain.append({
         "url": str(response.url),
         "status": response.status_code,
         "location": None
     })
+
     return chain
 
 def _build_result(response) -> HTTPResult:

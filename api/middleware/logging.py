@@ -1,17 +1,24 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from providers.database.connection import get_connection
+from scamLens import config
 
 LOGGED_PREFIXES = ("/api/scurl", "/api/qr")
+_TRUST_PROXY = config.get("logging", {}).get("trust_proxy", False)
+
+def _get_client_ip(request: Request) -> str:
+    if _TRUST_PROXY:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
         if any(request.url.path.startswith(p) for p in LOGGED_PREFIXES):
-            ip = request.headers.get("X-Forwarded-For", request.client.host)
-            ip = ip.split(",")[0].strip()
-
+            ip = _get_client_ip(request)
             user_id = getattr(request.state, "user_id", None)
             scan_id = getattr(request.state, "scan_id", None)
 

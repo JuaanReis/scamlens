@@ -1,4 +1,4 @@
-document.getElementById("version").textContent = "1.0.9";
+document.getElementById("version").textContent = "1.1.0";
 
 function corruptContent() {
   const content = document.querySelector(".main-content");
@@ -216,7 +216,7 @@ function activateEasterEgg() {
 
   const titles = [
     "Maybe I'm not doing so well after all.",
-    "scurl_api",
+    "scamLens_api",
     "you left this open.",
     "don't look away."
   ];
@@ -317,7 +317,7 @@ if (localStorage.getItem("seen")) {
 
   popup.innerHTML = `
     <div style="background:#000080;color:#fff;padding:4px 8px;font-size:12px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;">
-      <span>scurl_api</span>
+      <span>scamLens_api</span>
       <span id="popup-close" style="cursor:pointer;font-weight:bold;padding:0 4px;border-top:1px solid #fff;border-left:1px solid #fff;border-right:1px solid #404040;border-bottom:1px solid #404040;background:#c0c0c0;color:#000;">✕</span>
     </div>
     <div style="padding:16px 14px;color:#000;line-height:1.6;">

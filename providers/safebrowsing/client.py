@@ -1,7 +1,8 @@
 from json import loads
-import os
 from ..http.connect import post_response
+from scamLens import get_settings
 
+settings = get_settings()
 _ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 
 THREAT_TYPES = [
@@ -12,7 +13,7 @@ THREAT_TYPES = [
 ]
 
 def fetch_safe_browsing(url: str) -> dict | None:
-    api_key = os.getenv("GOOGLE_SAFE_BROWSING_KEY")
+    api_key = settings.google_safe_browsing_key
     if not api_key:
         return None
 

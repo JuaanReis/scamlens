@@ -2,13 +2,22 @@ from fastapi import Request, HTTPException
 from api.router.auth import decode_token
 from providers.database.users import get_user_by_id
 
+def _extract_token(request: Request) -> str | None:
+    if token := request.cookies.get("access_token"):
+        return token
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:]
+    return None
+
 def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
+    token = _extract_token(request)
 
     if not token:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    user_id = decode_token(token)
+    payload = decode_token(token, "access")
+    user_id = int(payload["sub"])
     user = get_user_by_id(user_id)
 
     if not user or not user["is_active"]:

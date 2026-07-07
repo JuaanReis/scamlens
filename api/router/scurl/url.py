@@ -27,7 +27,7 @@ MAX_CONCURRENT_SCANS = 20
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 @router.post(
-    "/analyze",
+    "/analyze/url",
     response_model=AnalyzeResponse,
     responses={
         400: {"model": ErrorResponse},

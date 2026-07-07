@@ -23,13 +23,13 @@ dependencies = [
 ]
 
 [project.scripts]
-scurl = "modules.scurl.cli.main:main"
+scurl = "plugins.scurl.cli.main:main"
 scamlens-api = "api.server:run"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
-    "modules*",
+    "plugins*",
     "api*",
     "providers*",
     "scamLens*",
@@ -37,6 +37,6 @@ include = [
 
 [tool.setuptools.package-data]
 "scamLens" = ["config.toml"]
-"modules.scurl" = ["config.toml"]
+"plugins.scurl" = ["config.toml"]
 "providers.database" = ["schema/*.sql", "storage/*.db"]
 api = ["static/*"]

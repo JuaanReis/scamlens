@@ -1,10 +1,9 @@
 from scamLens import __version__, config
-from os import getenv, getpid
 from pathlib import Path
 import logging
-from datetime import datetime
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
+from datetime import datetime
+from os import getpid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,26 +16,28 @@ import uvicorn
 from api.limiter import limiter
 from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
-from api.router.scurl.analyze import router as scurl_analyze_router
+from api.router.scurl.url import router as scurl_analyze_router
 from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
 from api.middleware.logging import RequestLoggingMiddleware
-from providers.database.connection import init_db
-load_dotenv()
+from providers.database.connection import get_connection, init_db
+from providers.database.seed import ensure_admin_exists
+from scamLens import get_settings
+from .path import _LOG_DIR, _STATIC, _STORAGE
 
-_BASE = Path(__file__).parent
-_STATIC = _BASE / "static"
-_STORAGE = _BASE.parent / "providers" / "database" / "storage"
-_LOG_DIR = _STORAGE / "logs"
-_LOG_DIR.mkdir(parents=True, exist_ok=True)
-(_STORAGE / "avatars").mkdir(parents=True, exist_ok=True)
-SESSION_LOG_FILE = _LOG_DIR / (
-    f"scamlens_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_pid{getpid()}.log"
-)
+settings = get_settings()
 
 _initialized_logging = False
+
+SESSION_LOG_FILE = None
+LOGS_ENABLED = config.get("server", {}).get("logs", False)
+if LOGS_ENABLED:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    SESSION_LOG_FILE = _LOG_DIR / (
+        f"scamlens_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_pid{getpid()}.log"
+    )
 
 def setup_logging_once(log_file: Path):
     global _initialized_logging
@@ -51,7 +52,7 @@ def setup_logging_once(log_file: Path):
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
         logger = logging.getLogger(name)
-        logger.handlers.clear()  # 🔥 importante: remove duplicados
+        logger.handlers.clear()  
         logger.addHandler(file_handler)
         logger.setLevel(logging.INFO)
 
@@ -59,16 +60,22 @@ def setup_logging_once(log_file: Path):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_logging_once(SESSION_LOG_FILE)
+    if LOGS_ENABLED:
+        setup_logging_once(SESSION_LOG_FILE)
 
     try:
         init_db()
     except Exception:
-        logging.exception("Database initialization failed")
+        if LOGS_ENABLED:
+            logging.exception("Database initialization failed")
+        raise
+
+    conn = get_connection()
+    ensure_admin_exists(conn)   
 
     yield
 
-_docs_url = None if getenv("SCAMLENS_ENV") == "production" else "/docs"
+_docs_url = None if settings.environment == "production" else "/docs"
 
 app = FastAPI(
     title="scamLens",
@@ -84,7 +91,8 @@ app.mount("/storage", StaticFiles(directory=str(_STORAGE)), name="storage")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
-app.add_middleware(RequestLoggingMiddleware)
+if LOGS_ENABLED:
+    app.add_middleware(RequestLoggingMiddleware)
 
 cors_config = config.get("cors", {})
 if cors_config.get("enabled", True):
@@ -108,7 +116,9 @@ app.include_router(scurl_qr_router, prefix="/api/scurl/qr")
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logging.exception("Unhandled server error")
+    if LOGS_ENABLED:
+        logging.exception("Unhandled server error")
+
     return JSONResponse(
         status_code=500,
         content={"error": "internal server error"},

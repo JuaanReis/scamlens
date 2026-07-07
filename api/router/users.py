@@ -1,3 +1,4 @@
+import re
 from uuid import uuid4
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
@@ -8,21 +9,22 @@ from providers.database.users import update_avatar
 router = APIRouter(prefix="/api/user", tags=["users"])
 
 AVATARS_DIR = Path("providers/database/storage/avatars")
-MAX_SIZE_BYTES = 2 * 1024 * 1024
+MAX_SIZE_BYTES = 2 * 1024 * 1024 
 
 ALLOWED_SIGNATURES: list[tuple[bytes, str, str]] = [
-    (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+    (b"\xff\xd8\xff", "jpg",  "image/jpeg"),
     (b"\x89PNG\r\n\x1a\n", "png", "image/png"),
     (b"RIFF", "webp", "image/webp"),
-    (b"GIF87a", "gif", "image/gif"),
-    (b"GIF89a", "gif", "image/gif"),
+    (b"GIF87a", "gif",  "image/gif"),
+    (b"GIF89a", "gif",  "image/gif"),
 ]
+
+_AVATAR_FILENAME_RE = re.compile(r"^\d+_[0-9a-f]{32}\.(jpg|png|webp|gif)$")
 
 def _detect(data: bytes) -> tuple[str, str] | None:
     for magic, ext, mime in ALLOWED_SIGNATURES:
         if not data.startswith(magic):
             continue
-
         if ext == "webp" and data[8:12] != b"WEBP":
             continue
         return ext, mime
@@ -45,14 +47,13 @@ def me(user: dict = Depends(get_current_user)):
 
 @router.post("/avatar")
 async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    contents = await file.read()
-
+    contents = await file.read(MAX_SIZE_BYTES + 1)
     if len(contents) > MAX_SIZE_BYTES:
-        raise HTTPException(status_code=413, detail="Arquivo muito grande. Máximo 2MB.")
+        raise HTTPException(status_code=413, detail="File too large. Maximum 2MB.")
 
     detected = _detect(contents)
     if detected is None:
-        raise HTTPException(status_code=415, detail="Formato inválido. Use JPEG, PNG, WebP ou GIF.")
+        raise HTTPException(status_code=415, detail="Invalid format. Use JPEG, PNG, WebP, or GIF.")
 
     ext, _ = detected
 
@@ -63,9 +64,11 @@ async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_c
 
     old_url = user.get("avatar_url")
     if old_url:
-        old_path = AVATARS_DIR / old_url.split("/")[-1]
-        if old_path.exists():
-            old_path.unlink()
+        old_filename = old_url.split("/")[-1]
+        if _AVATAR_FILENAME_RE.match(old_filename):
+            old_path = AVATARS_DIR / old_filename
+            if old_path.exists():
+                old_path.unlink()
 
     path.write_bytes(contents)
 
