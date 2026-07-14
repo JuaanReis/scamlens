@@ -11,3 +11,6 @@ venv/
 logs/
 db/
 avatars/
+storage/
+Procfile
+scfs/

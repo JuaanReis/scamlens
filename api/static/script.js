@@ -1,134 +1,96 @@
 document.getElementById("version").textContent = "1.1.0";
 
 function corruptContent() {
-  const content = document.querySelector(".main-content");
-  content.innerHTML = `
-    <section>
-      <h1>R̷e̸f̵e̴r̷ê̴n̸c̵i̴a̷ ̸d̵a̴ ̷A̸P̵I̴</h1>
-      <p>B̵a̸s̷e̴ ̵U̸R̷L̴ ̵p̸a̷r̴a̵ ̸t̷o̴d̵a̸s̷ ̴a̵s̸ ̷r̴e̵q̸u̷i̴s̵i̸ç̷õ̴e̵s̸:̷ ̴<code>https://???/</code></p>
-      <img src="https://web.archive.org/web/20091027003812im_/http://es.geocities.com/lady_johanna_colombia/linearos.gif" style="display:block;margin:20px auto;">
-      <h3>Autenticação & Limites</h3>
-      <p>A API n̷ã̸o̵ ̸é̷ ̴p̵ú̸b̷l̴i̵c̸a̷. O controle é feito via ███████ por endereço ██.</p>
-      <table class="data-table">
-        <tr><th>Recurso</th><th>Configuração / Resposta</th></tr>
-        <tr><td>Rate Limit</td><td><span class="highlight">— — —</span></td></tr>
-        <tr><td>Concorrência</td><td>Máximo de <b>?</b> scans. Retorna <span class="highlight">000 Unknown</span>.</td></tr>
-      </table>
-    </section>
+  const blocks = document.querySelectorAll(".main-content");
+  if (!blocks.length) return;
 
+  blocks[0].innerHTML = `
     <section>
-      <h2>Endpoints D̵i̸s̷p̴o̵n̸í̷v̴e̵i̸s̷</h2>
-      <img src="https://web.archive.org/web/20090831183350im_/http://geocities.com/kiwanisbaseball/_derived/13_year_old.htm_cmp_zero010_bnr.gif" style="display:block;margin:20px auto;">
-      <h3>POST /analyze</h3>
-      <p>E̷x̸e̵c̴u̷t̸a̵ ̴a̷ ̸e̵n̴g̷i̸n̵e̴ ̷s̸o̵b̴r̷e̸ ̵u̴m̷a̸ ̵U̴R̷L̸ ̵e̴s̷p̸e̵c̴í̷f̸i̵c̴a̷.̸ ̵O̴u̷ ̸n̵ã̴o̷.</p>
+      <h1>A̷P̸I̵ ̴P̷ú̸b̵l̴i̷c̸a̵.̴ ̷O̸u̵ ̴n̷ã̸o̵ ̴t̷ã̸o̵ ̴p̷ú̸b̵l̴i̷c̸a̵.</h1>
+      <p>B̵a̸s̷e̴ ̵U̸R̷L̴:̵ ̸<code>https://???/</code>. R̷e̸s̵p̴o̷n̸d̵e̴ ̷o̸u̵ ̴n̷ã̸o̵ ̴r̷e̸s̵p̴o̷n̸d̵e̴.</p>
+      <img src="https://web.archive.org/web/20091027003812im_/http://es.geocities.com/lady_johanna_colombia/linearos.gif" style="display:block;margin:20px auto;">
+
+      <h2 id="auth-endpoints">A̷u̸t̵e̴n̷t̸i̵c̴a̷ç̸ã̵o̴</h2>
+      <p>t̷o̸k̵e̴n̷ ̸c̵u̴r̷t̸o̵.̴ ̷r̸e̵f̴r̷e̸s̵h̴ ̷r̸o̵t̴a̷t̸i̵v̴o̷.̸ ̵o̴u̷ ̸n̵ã̴o̷ ̸r̵o̴t̷a̸ ̵m̴a̷i̸s̵.</p>
+      <table class="data-table">
+        <tr><th>R̷o̸t̵a̴</th><th>A̷u̸t̵h̴</th></tr>
+        <tr><td>/auth/login</td><td><span class="highlight">— — —</span></td></tr>
+        <tr><td>/api/auth/cli-token</td><td>t̷a̸l̵v̴e̷z̸</td></tr>
+      </table>
+
+      <h2 id="url-endpoints">A̷n̸á̵l̴i̷s̸e̵ ̴d̷e̸ ̵U̴R̷L̸</h2>
+      <p>e̷x̸e̵c̴u̷t̸a̵ ̴a̷ ̸e̵n̴g̷i̸n̵e̴ ̷s̸o̵b̴r̷e̸ ̵u̴m̷a̸ ̵U̴R̷L̸.̵ ̸o̷u̸ ̵s̴o̷b̸r̵e̴ ̷v̸o̵c̴ê̷.</p>
       <pre>POST /analyze
 Content-Type: application/json
 
 {
   "url": "https://???",
-  "use_cache": true,
-  "use_cache": true,
-  "use_cache": true
+  "score": —,
+  "score": —,
+  "score": —
 }</pre>
-      <h3>GET /scans</h3>
-      <p>R̷e̸t̵o̴r̷n̸a̵ ̴l̷i̸s̵t̴a̷ ̸d̵e̴ ̷a̸n̵á̴l̷i̸s̵e̴s̷ ̴r̵e̸c̷e̴n̵t̸e̷s̴.̵ ̸o̷u̴ ̵n̸ã̷o̴ ̵r̷e̸t̵o̴r̷n̸a̵ ̴n̷a̸d̵a̴.</p>
-      <h3>GET /scans/{identifier}</h3>
-      <p>identifier não é o que você pensa.</p>
-      <h3>GET /health</h3>
-      <p>o̷ ̸s̵e̴r̷v̸i̵ç̴o̷ ̸e̵s̴t̷á̸ ̵b̴e̷m̸.̵ ̴o̷u̸ ̵n̵ã̴o̷ ̸e̵s̴t̷á̸.</p>
-    </section>
 
-    <section>
-      <h2>Schemas d̵e̸ ̷R̴e̵s̸p̷o̴s̵t̸a̷</h2>
-      <img src="https://web.archive.org/web/20090830222644im_/http://geocities.com/asopepisk/asop1.gif" style="display:block;margin:20px auto;">
-      <pre>{
-  "status": "?",
-  "engine": { "name": "???", "version": "?" },
-  "meta": {
-    "scan_id": "████████████████████████████████",
-    "scan_time_s": —,
-    "url": "https://???",
-    "threads": ?,
-    "timestamp": "????-??-??T??:??:??.??????+00:00"
-  },
-  "result": {
-    "score": —,
-    "risk_level": "unknown",
-    "verdict": "???"
-  },
-  "stats": {
-    "rules_total": 0,
-    "rules_triggered": 0,
-    "trigger_rate": —
-  },
-  "heuristics": [ ??? ],
-  "insight": [ ??? ]
-}</pre>
-      <h4>heuristics[]</h4>
-      <table class="data-table">
-        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
-        <tr><td>n̷a̸m̵e̴</td><td>str</td><td>████████</td></tr>
-        <tr><td>c̵a̸t̷e̴g̵o̸r̷y̴</td><td>str</td><td>s̵e̸r̷v̴e̵r̸ · h̵t̸m̷l̴ · u̵r̸l̷ · ???</td></tr>
-        <tr><td>value</td><td>float</td><td>0.0 – 1.0 · ou não</td></tr>
-        <tr><td>weight</td><td>float</td><td>peso · ou ausência de peso</td></tr>
-        <tr><td>contribution</td><td>float</td><td>contribuição · ou nada</td></tr>
-        <tr><td>details</td><td>dict</td><td>varia · sempre varia</td></tr>
-        <tr><td>reasons</td><td>list[str]</td><td>███ explicações ███</td></tr>
-      </table>
-    </section>
+      <h2 id="qr-endpoints">A̷n̸á̵l̴i̷s̸e̵ ̴d̷e̸ ̵Q̴R̷</h2>
+      <p>d̷e̸c̵o̴d̷i̸f̵i̴c̷a̸ ̵o̴ ̷q̸u̵e̴ ̷v̸o̵c̴ê̷ ̸m̵o̴s̷t̸r̵a̴.̷ ̸n̵e̴m̷ ̸s̵e̴m̷p̸r̵e̴ ̷o̸ ̵q̴u̷e̸ ̵v̴o̷c̸ê̵ ̴p̷e̸n̵s̴a̷ ̸m̵o̴s̷t̸r̵a̴r̷.</p>
+      <h3>qr_type</h3>
+      <p>u̷r̸l̵ ̴·̷ ̸w̵i̴f̷i̸ ̵·̴ ̷e̸m̵a̴i̷l̸ ̵·̴ ̷p̸i̵x̴ ̷·̸ ̵v̴c̷a̸r̵d̴ ̷·̸ ̵?̴?̷?̸</p>
 
-    <section>
-      <h2>T̵a̸r̷g̴e̵t̸R̵e̴s̷p̸o̵n̴s̷e̸</h2>
-      <img src="https://web.archive.org/web/20090830222644im_/http://geocities.com/asopepisk/perister.gif" style="display:block;margin:20px auto;">
-      <h3>1. Identity</h3>
+      <h2 id="profile-endpoints">P̷e̸r̵f̴i̷l̸</h2>
+      <p>o̷ ̸q̵u̴e̷ ̸v̵o̴c̷ê̸ ̵é̴ ̷p̸r̵a̴ ̷n̸ó̵s̴.̷ ̸o̵u̴ ̷o̸ ̵q̴u̷e̸ ̵s̴o̷b̸r̵o̴u̷.</p>
       <table class="data-table">
-        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
-        <tr><td>original_url</td><td>str</td><td>URL como fornecida · talvez</td></tr>
-        <tr><td>final_url</td><td>str|null</td><td>URL após redirecionamentos · se houver</td></tr>
-        <tr><td>registered_domain</td><td>str</td><td>domínio registrado · ou não registrado</td></tr>
-        <tr><td>is_homograph</td><td>bool</td><td>ataque homograph · ou inocência</td></tr>
-        <tr><td>domain_entropy</td><td>float</td><td>entropia · tudo tem entropia</td></tr>
-        <tr><td>has_ip</td><td>bool</td><td>IP em vez de domínio · suspeito</td></tr>
+        <tr><th>C̷a̸m̵p̴o̷</th><th>V̷a̸l̵o̴r̷</th></tr>
+        <tr><td>total_scans</td><td>████</td></tr>
+        <tr><td>created_at</td><td>?̷?̸?̵?̴-̷?̸?̵-̴?̷?̸T̵?̴?̷:̸?̵?̴:̷?̸?̵Z̴</td></tr>
       </table>
-      <h3>2. Network</h3>
-      <table class="data-table">
-        <tr><th>Campo</th><th>Descrição</th></tr>
-        <tr><td>asn</td><td>número do sistema autônomo · autônomo</td></tr>
-        <tr><td>timings</td><td>dns · tcp · tls · ttfb · em milissegundos · ou eternidade</td></tr>
-        <tr><td>cdn</td><td>detectado · ou não detectado · ou indetectável</td></tr>
-        <tr><td>waf</td><td>firewall · ou ilusão de firewall</td></tr>
-      </table>
-      <h3>3. TLS</h3>
-      <table class="data-table">
-        <tr><th>Campo</th><th>Descrição</th></tr>
-        <tr><td>enabled</td><td>https · ou http · ou nenhum</td></tr>
-        <tr><td>valid_until</td><td>expira · tudo expira</td></tr>
-        <tr><td>self_signed</td><td>assinou o próprio certificado · como todos nós</td></tr>
-        <tr><td>fingerprints</td><td>sha1 · sha256 · identidade</td></tr>
-      </table>
-      <h3>4. DNS</h3>
-      <table class="data-table">
-        <tr><th>Campo</th><th>Descrição</th></tr>
-        <tr><td>spf</td><td>configurado · ou não · ou fingindo</td></tr>
-        <tr><td>dmarc</td><td>configurado · ou não · ou fingindo</td></tr>
-        <tr><td>ttl</td><td>tempo de vida · em segundos · conta regressiva</td></tr>
-      </table>
-    </section>
 
-    <section>
-      <h2>Códigos de Erro</h2>
+      <h2 id="health-endpoints">H̷e̸a̵l̴t̷h̸</h2>
+      <p>o̷ ̸s̵e̴r̷v̸i̵ç̴o̷ ̸e̵s̴t̷á̸ ̵b̴e̷m̸.̵ ̴o̷u̸ ̵n̴ã̷o̸ ̵e̴s̷t̸á̵.̴ ̷n̸ó̵s̴ ̷n̸ã̵o̴ ̷s̸a̵b̴e̷r̸í̵a̴m̷o̸s̵.</p>
+      <pre>{ "status": "?" }</pre>
+
+      <h2 id="rate-limiting">R̷a̸t̵e̴ ̷L̸i̵m̴i̷t̸ ̵/̴ ̷Q̸u̵o̴t̷a̸</h2>
       <table class="data-table">
-        <tr><th>Status</th><th>Significado</th></tr>
-        <tr><td><span class="highlight">000</span></td><td>não sabemos.</td></tr>
-        <tr><td><span class="highlight">∞</span></td><td>algo persistiu.</td></tr>
-        <tr><td><span class="highlight">—</span></td><td>o observer ainda está aqui.</td></tr>
-        <tr><td><span class="highlight">400</span></td><td>o engine falhou · como todos falham</td></tr>
-        <tr><td><span class="highlight">404</span></td><td>não encontrado · nunca foi encontrado</td></tr>
-        <tr><td><span class="highlight">429</span></td><td>muitas requisições · você não para</td></tr>
-        <tr><td><span class="highlight">503</span></td><td>ocupado · ou exausto</td></tr>
+        <tr><th>R̷e̸g̵r̴a̷</th><th>V̷a̸l̵o̴r̷</th></tr>
+        <tr><td>Rate limit</td><td><span class="highlight">— — —</span></td></tr>
+        <tr><td>Quota</td><td>m̷á̸x̵i̴m̷o̸ ̵d̴e̷ ̸<b>?</b> ̵s̴c̷a̸n̵s̴.̷ ̸r̵e̴t̷o̸r̵n̴a̷ ̸<span class="highlight">000 Unknown</span></td></tr>
       </table>
     </section>
   `;
+
+  if (blocks[1]) {
+    blocks[1].innerHTML = `
+      <section id="schemas">
+        <h2>S̷c̸h̵e̴m̷a̸s̵.̴ ̷o̸u̵ ̴o̷ ̸q̵u̴e̷ ̸r̵e̴s̷t̸o̵u̴ ̷d̸e̵l̴e̷s̸</h2>
+        <img src="https://web.archive.org/web/20090830222644im_/http://geocities.com/asopepisk/asop1.gif" style="display:block;margin:20px auto;">
+
+        <h3>S̷c̸a̵n̴R̷e̸s̵u̴l̷t̸</h3>
+        <table class="data-table">
+          <tr><th>C̷a̸m̵p̴o̷</th><th>T̷i̸p̵o̴</th><th>D̷e̸s̵c̴r̷i̸ç̵ã̴o̷</th></tr>
+          <tr><td>scan_id</td><td>str</td><td>████████</td></tr>
+          <tr><td>score</td><td>float</td><td>0 – 100 · ou n̷ã̸o̵</td></tr>
+          <tr><td>classification</td><td>str</td><td>b̷e̸n̵i̴g̷n̸ ̵·̴ ̷s̸u̵s̴p̷i̸c̵i̴o̷u̸s̵ ̴·̷ ̸?̵?̴?̷</td></tr>
+          <tr><td>heuristics</td><td>list</td><td>r̷a̸z̵õ̴e̷s̸ ̵q̴u̷e̸ ̵n̴ã̷o̸ ̵v̴o̷c̸ê̵ ̴n̷ã̸o̵ ̴p̷e̸d̵i̴u̷</td></tr>
+        </table>
+
+        <h3>Q̷r̸S̵c̴a̷n̸R̵e̴s̷u̸l̵t̴</h3>
+        <table class="data-table">
+          <tr><th>C̷a̸m̵p̴o̷</th><th>D̷e̸s̵c̴r̷i̸ç̵ã̴o̷</th></tr>
+          <tr><td>payload</td><td>o̷ ̸q̵u̴e̷ ̸e̵s̴t̷a̸v̵a̴ ̷e̸s̵c̴o̷n̸d̵i̴d̷o̸ ̵n̴o̷ ̸q̵u̴a̷d̸r̵a̴d̷o̸</td></tr>
+        </table>
+      </section>
+
+      <section id="status">
+        <h2>C̷ó̸d̵i̴g̷o̸s̵ ̴d̷e̸ ̵E̴r̷r̸o̵</h2>
+        <img src="https://web.archive.org/web/20090830222644im_/http://geocities.com/asopepisk/perister.gif" style="display:block;margin:20px auto;">
+        <table class="data-table">
+          <tr><th>Status</th><th>Significado</th></tr>
+          <tr><td><span class="highlight">000</span></td><td>n̷ã̸o̵ ̴s̷a̸b̵e̴m̷o̸s̵.</td></tr>
+          <tr><td><span class="highlight">∞</span></td><td>a̷l̸g̵o̴ ̷p̸e̵r̴s̷i̸s̵t̴i̷u̸.</td></tr>
+          <tr><td><span class="highlight">—</span></td><td>o̷ ̸o̵b̴s̷e̸r̵v̴e̷r̸ ̵a̴i̷n̸d̵a̴ ̷e̸s̵t̴á̷ ̸a̵q̴u̷i̸.</td></tr>
+          <tr><td><span class="highlight">429</span></td><td>m̷u̸i̵t̴a̷s̸ ̵r̴e̷q̸u̵i̴s̷i̸ç̵õ̴e̷s̸.̵ ̴v̷o̸c̵ê̴ ̷n̸ã̵o̴ ̷p̸a̵r̴a̷.</td></tr>
+        </table>
+      </section>
+    `;
+  }
 }
 
 function corruptLinks() {

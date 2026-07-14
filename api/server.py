@@ -76,12 +76,15 @@ async def lifespan(app: FastAPI):
     yield
 
 _docs_url = None if settings.environment == "production" else "/docs"
+_openapi_url = None if settings.environment == "production" else "/openapi.json"
+_redoc_url = None if settings.environment == "production" else "/redoc"
 
 app = FastAPI(
     title="scamLens",
     version=__version__,
     docs_url=_docs_url,
-    redoc_url=None,
+    openapi_url=_openapi_url,
+    redoc_url=_redoc_url,
     lifespan=lifespan,
 )
 

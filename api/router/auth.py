@@ -2,9 +2,9 @@ import sqlite3
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from fastapi import APIRouter, Request, Response, HTTPException
-from pydantic import BaseModel, EmailStr
 from jwt import PyJWTError, encode, decode
 import bcrypt
+from .schema.auth_schema import LoginBody, RegisterBody
 from scamLens import config
 from providers.database.users import get_user_by_email, create_user, get_user_by_id
 from providers.database.tokens import revoke_token, is_token_revoked
@@ -20,7 +20,6 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TTL = timedelta(minutes=30)
 REFRESH_TTL = timedelta(days=30)
-
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
 
 def hash_password(password: str) -> str:
@@ -29,19 +28,9 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
-class RegisterBody(BaseModel):
-    email: EmailStr
-    name: str
-    password: str
-
-class LoginBody(BaseModel):
-    email: EmailStr
-    password: str
-    remember: bool = False
-
 cookie_config = config.get("cookies", {})
-secure = cookie_config.get("secure", False)
-samesite = cookie_config.get("samesite", "strict")
+secure = cookie_config.get("secure", True)
+samesite = cookie_config.get("samesite", "lax")
 httponly = cookie_config.get("httponly", True)
 
 COOKIE_KWARGS = {"httponly": httponly, "secure": secure, "samesite": samesite}

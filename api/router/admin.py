@@ -1,6 +1,6 @@
 from pathlib import Path
 from fastapi import APIRouter, Depends, Query, HTTPException
-from pydantic import BaseModel
+from .schema.admin_schema import ActiveBody, PlanBody, VALID_PLANS
 from api.middleware.auth import get_current_admin
 from providers.database.connection import get_connection
 from providers.database.users import list_users, set_user_active, update_user_plan, get_global_metrics
@@ -9,14 +9,6 @@ from fastapi.responses import PlainTextResponse
 from ..path import _LOG_DIR
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-VALID_PLANS = {"standard", "go_pro", "plus_premium"}
-
-class ActiveBody(BaseModel):
-    is_active: bool
-
-class PlanBody(BaseModel):
-    plan_name: str
 
 def _audit(admin_id: int, action: str, target_user_id: int | None = None, detail: str | None = None) -> None:
     conn = get_connection()

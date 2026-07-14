@@ -11,12 +11,17 @@
 <div class="container">
   <header>
     <a href="#" class="logo-text" id="link">scamlens_api</a>
-    <div class="tagline"><span id="desc">Referência Técnica de Integração</span> - Versão <span id="version"></span></div>
+    <div class="tagline"><span id="desc">Referência Pública de Integração</span> - Versão <span id="version"></span></div>
   </header>
 
   <nav>
     <a href="#intro">Visão Geral</a>
-    <a href="#endpoints">Endpoints</a>
+    <a href="#auth-endpoints">Auth</a>
+    <a href="#url-endpoints">Análise URL</a>
+    <a href="#qr-endpoints">Análise QR</a>
+    <a href="#profile-endpoints">Perfil</a>
+    <a href="#health-endpoints">Health</a>
+    <a href="#rate-limiting">Rate Limit/Quota</a>
     <a href="#schemas">Schemas</a>
     <a href="#status">Status/Erros</a>
   </nav>
@@ -25,151 +30,496 @@
 
     <section id="intro">
 
-      <h1>Arquitetura do ScamLens</h1>
+      <h1>ScamLens API</h1>
 
       <p>
-        O ScamLens expõe uma REST API construída com FastAPI e servida por Uvicorn atrás de um reverse proxy Nginx.
-        A API atua como camada de orquestração entre os motores <code>scurl</code> (URLs) e <code>scqr</code> (QR codes),
-        além de gerenciar autenticação, cache, quotas e logging.
+        API REST para detecção de phishing em URLs e QR codes. Autenticação, quotas de uso e formato
+        de resposta descritos abaixo.
       </p>
 
-      <hr>
-
-      <h2>Estrutura de diretórios</h2>
-      <pre>
-scamlens/
-├── api/
-│   ├── analyze.py
-│   ├── analyze_qr.py
-│   ├── auth.py
-│   ├── user.py
-│   └── health.py
-├── plugins/
-│   ├── math/
-│   ├── scurl/
-│   └── scqr/
-├── providers/
-├── middleware/
-│   └── logging.py
-└── scamLens/
-    └── config.toml
-      </pre>
-
-      <h2>Entrypoint e ciclo de vida</h2>
-      <p>Inicialização via lifespan do FastAPI:</p>
-
-      <pre>
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    setup_file_logging()
-    init_database()
-    yield
-    teardown_logging()
-
-app = FastAPI(lifespan=lifespan)
-      </pre>
-
-      <p>Em produção, docs são desabilitados via <code>SCAMLENS_ENV=production</code>.</p>
-
-      <hr>
-
-      <h2 id="endpoints">Rotas principais</h2>
-
-      <table class="data-table">
-        <tr><th>Grupo</th><th>Prefixo</th><th>Descrição</th></tr>
-        <tr><td>Análise URL</td><td>/analyze</td><td>Scan de URLs</td></tr>
-        <tr><td>QR Code</td><td>/analyze/qr</td><td>Scan de imagens QR</td></tr>
-        <tr><td>Auth</td><td>/auth</td><td>Login e tokens</td></tr>
-        <tr><td>User</td><td>/profile</td><td>Perfil e histórico</td></tr>
-        <tr><td>Health</td><td>/health</td><td>Status do sistema</td></tr>
-      </table>
-
-      <hr>
-
-      <h2>Autenticação</h2>
-
-      <p>
-        JWT curto (15 min) + refresh token rotativo (7 dias). Ambos via cookies httpOnly.
-      </p>
-
-      <h3>Fluxo</h3>
-      <pre>
-POST /auth/login → emite JWT + refresh cookie
-POST /auth/refresh → renova tokens
-POST /auth/logout → invalida refresh
-      </pre>
-
-      <hr>
-
-      <h2>Pipeline de análise (URL)</h2>
-
-      <pre>
-request → quota → cache → scurl.run_engine → persist → response
-      </pre>
-
-      <p>O motor <code>scurl</code> é stateless.</p>
-
-      <hr>
-
-      <h2>Pipeline de QR</h2>
-
-      <pre>
-upload → validate → decode → classify → route → analyze → persist
-      </pre>
-
+      <h2>Convenções gerais</h2>
       <ul>
-        <li>pyzbar como decoder primário</li>
-        <li>zxingcpp como fallback</li>
-        <li>classificação por prefixo do payload</li>
+        <li><strong>Base URL:</strong> <code>https://scamlens-production.up.railway.app</code></li>
+        <li><strong>Formato:</strong> <code>application/json</code>, exceto upload de QR (<code>multipart/form-data</code>)</li>
+        <li><strong>Autenticação:</strong> cookies httpOnly e JWT.</li>
+        <li><strong>Case:</strong> chaves JSON em <code>snake_case</code></li>
       </ul>
 
       <hr>
 
-      <h2>Rate limiting e quotas</h2>
-
-      <ul>
-        <li>Rate limit por IP (429)</li>
-        <li>Quota diária por usuário/IP</li>
-        <li>Semaphore para concorrência máxima</li>
-      </ul>
-
-      <hr>
-
-      <h2 id="schemas">Cache</h2>
+      <h2 id="auth-endpoints">Autenticação</h2>
 
       <p>
-        Cache baseado em SHA-256 da URL normalizada. Evita reexecução do pipeline completo.
+        Token de acesso de curta duração + refresh token para renovação, sem exigir novo login.
+        Uso via navegador: cookies httpOnly. Uso via CLI/scripts: Bearer token.
       </p>
-
-      <hr>
-
-      <h2>Middleware</h2>
-
-      <p>
-        Logging em nível de requisição (ASGI middleware) e logging de API em nível de rota.
-      </p>
-
-      <hr>
-
-      <h2 id="status">Banco de dados</h2>
-
-      <p>SQLite em modo WAL com conexões thread-local.</p>
 
       <table class="data-table">
-        <tr><th>Tabela</th><th>Descrição</th></tr>
-        <tr><td>USERS</td><td>Contas</td></tr>
-        <tr><td>SCANS</td><td>Histórico URL</td></tr>
-        <tr><td>QR_SCANS</td><td>Histórico QR</td></tr>
-        <tr><td>URL_CACHE</td><td>Cache de resultados</td></tr>
+        <tr><th>Método</th><th>Rota</th><th>Auth necessária</th><th>Descrição</th></tr>
+        <tr><td>POST</td><td>/auth/register</td><td>Não</td><td>Cria novo usuário</td></tr>
+        <tr><td>POST</td><td>/auth/login</td><td>Não</td><td>Autentica e emite cookies de sessão</td></tr>
+        <tr><td>POST</td><td>/auth/refresh</td><td>Cookie de refresh</td><td>Renova a sessão</td></tr>
+        <tr><td>POST</td><td>/auth/logout</td><td>Cookie de sessão</td><td>Encerra a sessão</td></tr>
       </table>
+
+      <h3>POST /auth/register</h3>
+      <p><strong>Request body</strong></p>
+      <pre>
+{
+  "username": "string",
+  "email": "string",
+  "password": "string"
+}
+      </pre>
+      <p><strong>Response 201</strong></p>
+      <pre>
+{
+  "id": 7,
+  "username": "carlos",
+  "email": "carlos@example.com"
+}
+      </pre>
+      <p><strong>Erros:</strong> <code>409</code> username/e-mail já em uso, <code>422</code> campo inválido.</p>
+
+      <h3>POST /auth/login</h3>
+      <p><strong>Request body</strong></p>
+      <pre>
+{
+  "username": "string",
+  "password": "string"
+}
+      </pre>
+      <p><strong>Response 200</strong> — tokens entregues via <code>Set-Cookie</code> (httpOnly):</p>
+      <pre>
+{
+  "ok": true
+}
+      </pre>
+      <p><strong>Erros:</strong> <code>401</code> credenciais inválidas.</p>
+
+      <h3>POST /auth/refresh</h3>
+      <p>Sem body — usa o cookie de refresh existente. Retorna <code>204</code> em caso de sucesso.</p>
+      <p><strong>Erros:</strong> <code>401</code> sessão ausente ou expirada.</p>
+
+      <h3>POST /auth/logout</h3>
+      <p>Sem body. <strong>Response 204</strong>.</p>
+
+      <hr>
+
+      <h2 id="url-endpoints">Análise de URL</h2>
+
+      <table class="data-table">
+        <tr><th>Método</th><th>Rota</th><th>Auth</th><th>Descrição</th></tr>
+        <tr><td>POST</td><td>/analyze</td><td>Opcional</td><td>Executa scan completo de uma URL</td></tr>
+        <tr><td>GET</td><td>/analyze/{scan_id}</td><td>Dono do scan</td><td>Recupera resultado por ID</td></tr>
+      </table>
+
+      <h3>POST /analyze</h3>
+      <p><strong>Request body</strong></p>
+      <pre>
+{
+  "url": "https://exemplo-suspeito.com/login"
+}
+      </pre>
+      <p><strong>Response 200</strong></p>
+      <pre>
+{
+  "scan": {
+    "status": "...",
+    "engine": {
+      "name": "...",
+      "version": "..."
+    },
+    "meta": {
+      "scan_id": "...",
+      "scan_time_s": 0,
+      "url_hash": "...",
+      "url": "...",
+      "threads": 0,
+      "timestamp": "..."
+    },
+    "result": {
+      "score": 0,
+      "risk_level": "...",
+      "verdict": "..."
+    },
+    "stats": {
+      "rules_total": 0,
+      "rules_triggered": 0,
+      "trigger_rate": 0
+    },
+    "heuristics": [
+      {
+        "name": "...",
+        "category": "...",
+        "value": 0,
+        "weight": 0,
+        "contribution": 0,
+        "details": {
+          "input_count": 0,
+          "form_count": 0,
+          "suspicious": false
+        },
+        "reasons": [
+          "..."
+        ]
+      }
+    ],
+    "insight": []
+  },
+  "target": {
+    "identity": {
+      "original_url": "...",
+      "final_url": "...",
+      "scheme": "...",
+      "hostname": "...",
+      "registered_domain": "...",
+      "tld": "...",
+      "subdomains": [],
+      "subdomain_count": 0,
+      "port": null,
+      "path": "...",
+      "query": "...",
+      "fragment": "...",
+      "normalized_url": "...",
+      "punycode": "...",
+      "unicode_domain": "...",
+      "is_idn": false,
+      "is_homograph": false,
+      "domain_length": 0,
+      "domain_entropy": 0,
+      "url_length": 0,
+      "has_ip": false,
+      "has_port": false
+    },
+    "network": {
+      "ipv4": [
+        "..."
+      ],
+      "ipv6": [
+        "..."
+      ],
+      "reverse_dns": null,
+      "asn": null,
+      "geo": null,
+      "isp": null,
+      "cdn": null,
+      "waf": null,
+      "http_version": null,
+      "timings": {
+        "total_ms": 0,
+        "dns_ms": null,
+        "tcp_ms": null,
+        "tls_ms": null,
+        "ttfb_ms": null
+      }
+    },
+    "tls": {
+      "enabled": false,
+      "version": "...",
+      "cipher_suite": "...",
+      "issuer": "...",
+      "issuer_detail": {
+        "countryName": "...",
+        "organizationName": "...",
+        "commonName": "..."
+      },
+      "subject": "...",
+      "valid_from": "...",
+      "valid_until": "...",
+      "validity_days": 0,
+      "san": [
+        "..."
+      ],
+      "san_count": 0,
+      "wildcard": false,
+      "self_signed": false,
+      "serial_number": "...",
+      "signature_algorithm": "...",
+      "public_key_algorithm": "...",
+      "ocsp_stapling": null,
+      "ocsp_reachable": null,
+      "fingerprints": {
+        "sha1": "...",
+        "sha256": "..."
+      }
+    },
+    "dns": {
+      "a": [
+        "..."
+      ],
+      "aaaa": [
+        "..."
+      ],
+      "mx": [
+        {
+          "priority": 0,
+          "host": "..."
+        }
+      ],
+      "ns": [
+        "..."
+      ],
+      "cname": [],
+      "txt": [
+        "..."
+      ],
+      "spf": false,
+      "dmarc": false,
+      "dkim": false,
+      "ttl": 0,
+      "has_mx": false
+    },
+    "http": {
+      "status_code": 0,
+      "response_time_s": 0,
+      "redirects": 0,
+      "redirect_chain": [
+        {
+          "url": "...",
+          "status": 0,
+          "location": null
+        }
+      ],
+      "content_type": "...",
+      "content_length": 0,
+      "encoding": "...",
+      "compression": {
+        "enabled": false,
+        "algorithm": "..."
+      },
+      "server": "...",
+      "alt_svc": "...",
+      "keep_alive": false,
+      "security_headers": {
+        "x-content-type-options": "...",
+        "content-security-policy": "...",
+        "strict-transport-security": "...",
+        "x-frame-options": "...",
+        "cross-origin-opener-policy": "...",
+        "permissions-policy": "..."
+      },
+      "cookies": null
+    },
+    "content": {
+      "title": "...",
+      "language": "...",
+      "html_size_kb": 0,
+      "scripts": {
+        "total": 0,
+        "external": 0,
+        "inline": 0
+      },
+      "stylesheets": 0,
+      "iframes": 0,
+      "forms": {
+        "count": 0,
+        "password_fields": 0
+      },
+      "inputs": 0,
+      "images": 0,
+      "anchors": 0,
+      "favicon": "...",
+      "canonical": "...",
+      "meta_tags": {
+        "apple-itunes-app": "...",
+        "og:image": "...",
+        "og:title": "...",
+        "fb:app_id": "...",
+        "description": "...",
+        "keywords": "...",
+        "theme-color": "..."
+      },
+      "generator": null,
+      "spa": false,
+      "html_sha256": "..."
+    },
+    "domain": {
+      "registrar": "...",
+      "created_at": "...",
+      "updated_at": "...",
+      "expires_at": "...",
+      "age_days": 0,
+      "status": [
+        "..."
+      ]
+    }
+  }
+}
+      </pre>
+      <p><strong>Erros:</strong> <code>422</code> URL malformada, <code>429</code> rate limit ou quota excedida, <code>502</code> falha ao acessar o alvo (timeout, DNS, bloqueio de segurança).</p>
+
+      <h3>GET /analyze/{scan_id}</h3>
+      <p>Mesmo shape de response do POST. <strong>Erros:</strong> <code>404</code> scan não existe, <code>403</code> scan pertence a outro usuário.</p>
+
+      <hr>
+
+      <h2 id="qr-endpoints">Análise de QR Code</h2>
+
+      <table class="data-table">
+        <tr><th>Método</th><th>Rota</th><th>Auth</th><th>Descrição</th></tr>
+        <tr><td>POST</td><td>/analyze/qr</td><td>Opcional</td><td>Upload de imagem contendo QR code</td></tr>
+      </table>
+
+      <h3>POST /analyze/qr</h3>
+      <p><strong>Request:</strong> <code>multipart/form-data</code>, campo <code>file</code> (imagem PNG/JPEG).</p>
+      <p><strong>Response 200</strong></p>
+      <pre>
+        Mesma resposta do <code>/analyze</code>
+      </pre>
+      <p>
+        Tipos de <code>qr_type</code> suportados: <code>url</code> apenas.
+      </p>
+      <p><strong>Erros:</strong> <code>400</code> nenhum QR detectado na imagem, <code>413</code> arquivo excede tamanho máximo ⚠ definir limite, <code>415</code> tipo de arquivo não suportado.</p>
+
+      <hr>
+
+      <h2 id="profile-endpoints">Perfil e Histórico</h2>
+
+      <table class="data-table">
+        <tr><th>Método</th><th>Rota</th><th>Auth</th><th>Descrição</th></tr>
+        <tr><td>GET</td><td>/me</td><td>Sim</td><td>Dados do usuário autenticado</td></tr>
+        <tr><td>GET</td><td>/scurl/scans</td><td>Sim</td><td>Histórico paginado de scans (URL + QR)</td></tr>
+      </table>
+
+      <h3>GET /me</h3>
+      <pre>
+{
+  "name": "...",
+  "email": "...",
+  "avatar_url": null,
+  "plan": {
+    "name": "...",
+    "label": "...",
+    "price": 0
+  },
+  "activity": {
+    "total_scans": 0,
+    "avg_response_ms": 0,
+    "threats_detected": 0,
+    "weekly": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}
+      </pre>
+
+      <h3>GET /scurl/scans</h3>
+      <p><strong>Query params:</strong> <code>page</code> (default 1), <code>limit</code> (default 20), <code>type</code> (<code>url</code> | <code>qr</code>)</p>
+      <pre>
+{
+  "status": "...",
+  "total": 0,
+  "scans": [
+    {
+      "url": "...",
+      "score": 0,
+      "risk_level": "...",
+      "verdict": "...",
+      "scan_id": "...",
+      "timestamp": "...",
+      "url_hash": "..."
+    }
+  ]
+}
+      </pre>
+
+      <hr>
+
+      <h2 id="health-endpoints">Health</h2>
+
+      <table class="data-table">
+        <tr><th>Método</th><th>Rota</th><th>Auth</th><th>Descrição</th></tr>
+        <tr><td>GET</td><td>/health</td><td>Não</td><td>Status básico do serviço</td></tr>
+      </table>
+
+      <h3>GET /health</h3>
+      <pre>
+{
+  "status": "ok",
+  "datetime": "2007-07-07T01650:12.093774+00:00",
+  "db": "ok"
+}
+      </pre>
+
+      <hr>
+
+      <h2 id="rate-limiting">Rate limiting e quotas</h2>
+
+      <table class="data-table">
+        <tr><th>Regra</th><th>Valor</th><th>Escopo</th></tr>
+        <tr><td>Rate limit</td><td>10 req/min</td><td>Por IP</td></tr>
+        <tr><td>Quota não-autenticado</td><td>3 scans</td><td>Por IP, antes de exigir login</td></tr>
+        <tr><td>Quota autenticado</td><td>⚠ não documentado</td><td>Por usuário</td></tr>
+      </table>
+
+      <p>Ao exceder rate limit ou quota, a API retorna <code>429</code>. ⚠ Confirmar se há header <code>Retry-After</code> — sem ele, o cliente não sabe quanto tempo esperar.</p>
 
     </section>
 
   </div>
 
+  <div class="main-content">
+    <section id="schemas">
+      <h2>Schemas</h2>
+
+      <h3>ScanResult (URL)</h3>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>scan_id</td><td>string</td><td>Identificador único do scan</td></tr>
+        <tr><td>url</td><td>string</td><td>URL normalizada analisada</td></tr>
+        <tr><td>score</td><td>float</td><td>Score de risco (0–100)</td></tr>
+        <tr><td>classification</td><td>string</td><td>benign / suspicious / phishing ⚠ confirmar enum exato</td></tr>
+        <tr><td>heuristics</td><td>list[object]</td><td>Regras disparadas com peso</td></tr>
+        <tr><td>cached</td><td>bool</td><td>Se o resultado veio de cache recente</td></tr>
+      </table>
+
+      <h3>QrScanResult</h3>
+      <table class="data-table">
+        <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+        <tr><td>scan_id</td><td>string</td><td>Identificador único do scan</td></tr>
+        <tr><td>qr_type</td><td>string</td><td>url</td></tr>
+        <tr><td>payload</td><td>string</td><td>Conteúdo decodificado do QR</td></tr>
+      </table>
+
+      <h3>ErrorResponse</h3>
+      <pre>
+{
+  "detail": "string ou list[object] (erro de validação)"
+}
+      </pre>
+    </section>
+
+    <section id="status">
+      <h2>Status codes e erros</h2>
+
+      <table class="data-table">
+        <tr><th>Código</th><th>Significado</th><th>Quando ocorre</th></tr>
+        <tr><td>200</td><td>OK</td><td>Sucesso</td></tr>
+        <tr><td>201</td><td>Created</td><td>Registro criado</td></tr>
+        <tr><td>204</td><td>No Content</td><td>Ação concluída sem corpo de retorno</td></tr>
+        <tr><td>400</td><td>Bad Request</td><td>Payload inválido (ex: QR não detectado)</td></tr>
+        <tr><td>401</td><td>Unauthorized</td><td>Credenciais inválidas ou sessão expirada</td></tr>
+        <tr><td>403</td><td>Forbidden</td><td>Acesso a recurso de outro usuário</td></tr>
+        <tr><td>404</td><td>Not Found</td><td>Recurso inexistente</td></tr>
+        <tr><td>409</td><td>Conflict</td><td>Username/e-mail já registrado</td></tr>
+        <tr><td>413</td><td>Payload Too Large</td><td>Upload excede tamanho máximo</td></tr>
+        <tr><td>415</td><td>Unsupported Media Type</td><td>Formato de arquivo não suportado</td></tr>
+        <tr><td>422</td><td>Unprocessable Entity</td><td>Erro de validação no body</td></tr>
+        <tr><td>429</td><td>Too Many Requests</td><td>Rate limit ou quota excedida</td></tr>
+        <tr><td>502</td><td>Bad Gateway</td><td>Falha ao acessar o alvo da análise</td></tr>
+        <tr><td>500</td><td>Internal Server Error</td><td>Erro não tratado</td></tr>
+      </table>
+    </section>
+  </div>
+
   <footer>
     scamLens v1.1.0<br>
-    Documentação gerada para uso técnico e acadêmico (2026).<br>
     <a href="https://github.com/JuaanReis/scamLens">Visitar repositório oficial</a>
     <br>
     <span id="message"></span>
@@ -179,4 +529,3 @@ upload → validate → decode → classify → route → analyze → persist
 </body>
 <script src="/static/script.js"></script>
 </html>
-<!--?????????a-->
