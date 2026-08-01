@@ -176,7 +176,7 @@ scurl https://exemplo-suspeito.com -c              # usa cache local
 | `GET` | `/api/admin/*` | Admin | Métricas, usuários, scans, logs |
 | `GET` | `/health` | — | Liveness probe (verifica banco) |
 
-Para a referência completa, veja [docs/usage.md](./docs/usage.md).
+Para a referência completa, veja [docs/usage.md](./docs/USAGE.md).
 
 ---
 
