@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scamlens"
-version = "1.5.0"
+version = "1.7.1"
 requires-python = ">=3.10"
 
 dependencies = [
@@ -46,7 +46,5 @@ include = [
 
 [tool.setuptools.package-data]
 "scamLens" = ["config.toml"]
-"plugins.scurl" = ["config.toml"]
-"plugins.scfs" = ["config.toml"]
 "providers.database" = ["schema/*.sql", "storage/*.db"]
 api = ["static/*"]

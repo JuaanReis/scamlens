@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sys import platform
 import uvicorn
+from time import perf_counter
 from api.limiter import limiter
 from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
@@ -21,7 +22,7 @@ from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
-from api.middleware.logging import RequestLoggingMiddleware
+from api.middleware.logging import RequestLoggingMiddleware, RequestTimerMiddleware
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from scamLens import get_settings
@@ -36,9 +37,16 @@ LOGS_ENABLED = config.get("server", {}).get("logs", False)
 if LOGS_ENABLED:
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
     SESSION_LOG_FILE = _LOG_DIR / (
-        f"scamlens_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_pid{getpid()}.log"
+        f"sl_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_pid{getpid()}.log"
     )
 
+START = perf_counter()
+    
+class PerfCounterFilter(logging.Filter):
+    def filter(self, record):
+        record.elapsed = f"{perf_counter() - START:.3f}ms"
+        return True
+    
 def setup_logging_once(log_file: Path):
     global _initialized_logging
 
@@ -46,15 +54,19 @@ def setup_logging_once(log_file: Path):
         return
 
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.addFilter(PerfCounterFilter())
     file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        logging.Formatter(
+            "[%(elapsed)s] %(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        )
     )
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+    for name in ("uvicorn", "uvicorn.error", "fastapi", "api.request"):
         logger = logging.getLogger(name)
-        logger.handlers.clear()  
+        logger.handlers.clear()
         logger.addHandler(file_handler)
         logger.setLevel(logging.INFO)
+        logger.propagate = False
 
     _initialized_logging = True
 
@@ -65,9 +77,9 @@ async def lifespan(app: FastAPI):
 
     try:
         init_db()
-    except Exception:
+    except Exception as e:
         if LOGS_ENABLED:
-            logging.exception("Database initialization failed")
+            logging.exception(f"Database initialization failed: {e}")
         raise
 
     conn = get_connection()
@@ -94,14 +106,16 @@ app.mount("/storage", StaticFiles(directory=str(_STORAGE)), name="storage")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
 if LOGS_ENABLED:
+    app.add_middleware(RequestTimerMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
 cors_config = config.get("cors", {})
 if cors_config.get("enabled", True):
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_config.get("allow_origins", ["*"]),
+        allow_origins=cors_config.get("allow_origins", []),
         allow_credentials=cors_config.get("allow_credentials", False),
         allow_methods=cors_config.get("allow_methods", ["*"]),
         allow_headers=cors_config.get("allow_headers", ["*"]),
@@ -124,18 +138,22 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
     return JSONResponse(
         status_code=500,
-        content={"error": "internal server error"},
+        content={
+            "error": "internal server error"
+        },
     )
 
 def run():
     server = config.get("server", {})
     workers = 1 if platform == "win32" else server.get("workers", 1)
+    
     uvicorn.run(
         "api.server:app",
         host=server.get("host", "0.0.0.0"),
         port=server.get("port", 8000),
         workers=workers,
-        reload=server.get("reload", False)
+        reload=server.get("reload", False),
+        access_log=not server.get("logs", False)
     )
 
 if __name__ == "__main__":

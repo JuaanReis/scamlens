@@ -1,9 +1,10 @@
 from .client import rdap_client
 import threading
 import tldextract
+from scamLens import config
 
-_MAX_CONCURRENT_PER_SERVER = 8
-_FALLBACK_MAX_CONCURRENT = 4
+_MAX_CONCURRENT_PER_SERVER = config.get("rdap", {}).get("max_concurrent_per_server", 8)
+_FALLBACK_MAX_CONCURRENT = config.get("rdap", {}).get("fallback_max_concurrent", 4)
 
 _RDAP_SERVERS: dict[str, str] = {
     "com":  "https://rdap.verisign.com/com/v1/domain/",

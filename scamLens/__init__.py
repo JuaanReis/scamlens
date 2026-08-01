@@ -33,7 +33,6 @@ except tomllib.TOMLDecodeError:
 class Settings:
     email_admin: str
     password_admin: str
-    scamlens_db_path: str
     jwt_secret: str
     google_safe_browsing_key: str
     environment: str = "production"
@@ -52,6 +51,5 @@ def get_settings() -> Settings:
         password_admin = environ["PASSWORD_ADMIN"],
         jwt_secret = environ["JWT_SECRET"],
         google_safe_browsing_key = environ["GOOGLE_SAFE_BROWSING_KEY"],
-        scamlens_db_path = environ.get("SCAMLENS_DB_PATH", "./providers/database/storage/db/scamlens.db"),
         environment = env,
     )

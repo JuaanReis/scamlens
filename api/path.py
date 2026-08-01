@@ -1,8 +1,9 @@
 from pathlib import Path
+from scamLens import config
 
-_BASE = Path(__file__).parent
-_STATIC = _BASE / "static"
-_STORAGE = _BASE.parent / "providers" / "database" / "storage"
-_LOG_DIR = _STORAGE / "logs"
+paths = config.get("paths", {})
+_STATIC = Path(paths.get("static", ""))
+_STORAGE = Path(paths.get("storage", ""))
+_LOG_DIR = Path(paths.get("logs", ""))
 
 (_STORAGE / "avatars").mkdir(parents=True, exist_ok=True)

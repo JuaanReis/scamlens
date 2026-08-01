@@ -1,4 +1,4 @@
-from stat import S_ISBLK, S_ISFIFO, S_ISCHR, S_ISSOCK
+from stat import S_ISBLK, S_ISFIFO, S_ISCHR, S_ISSOCK, S_ISDIR
 from pathlib import Path
 from typing import Optional
 from ...models.scan_context import ScanContext
@@ -49,6 +49,9 @@ def _validate_path(path: Path) -> Optional[dict]:
     mode = st.st_mode
     if S_ISFIFO(mode) or S_ISCHR(mode) or S_ISBLK(mode) or S_ISSOCK(mode):
         return _error("unsupported_file_type", f"Tipo de arquivo não suportado (pipe/device/socket): {path}")
+
+    if S_ISDIR(mode):
+        return _error("is_a_directory", f"Caminho é um diretório, não um arquivo: {path}")
 
     if st.st_size == 0:
         return _error("empty_input", f"Arquivo vazio: {path}")

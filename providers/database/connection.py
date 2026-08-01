@@ -1,11 +1,9 @@
 import sqlite3
 from pathlib import Path
 import threading
-from scamLens import get_settings
+from scamLens import config
 
-settings = get_settings()
-
-DB_PATH = Path(settings.scamlens_db_path)
+DB_PATH = Path(config.get("paths", {}).get("scamlens_db_path", "./providers/storage/db/scamlens.db"))
 BASE_DIR = Path(__file__).parent.parent.parent
 SCHEMA_FILE = BASE_DIR / "providers" / "database" / "schema" / "scans.sql"
 SCHEMA_DIR = BASE_DIR / "providers" / "database" / "schema"

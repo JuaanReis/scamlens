@@ -77,7 +77,7 @@ def get_logs(
     rows = conn.execute(
         "SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         (limit, offset),
-    ).fetchall()
+    ).fetchall() 
     return [dict(r) for r in rows]
 
 def _safe_log_path(filename: str) -> Path:

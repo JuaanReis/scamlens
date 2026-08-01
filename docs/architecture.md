@@ -1,6 +1,6 @@
 # Arquitetura do ScamLens
 
-O ScamLens expõe uma REST API construída com FastAPI e servida por Uvicorn atrás de um reverse proxy Nginx. A API é a camada de entrada que orquestra os dois motores de análise — `scurl` (URLs) e `scqr` (QR codes) — e gerencia autenticação, quotas, cache e logging de requisições.
+O ScamLens disponibiliza uma REST API construída com FastAPI e servida por Uvicorn atrás de um reverse proxy Nginx. A API orquestra o motor `scurl` (análise de URL), que por sua vez incorpora internamente o decoder de QR code (`scqr`, vendorizado), e gerencia autenticação, quotas, cache e logging de requisições.
 
 ---
 
@@ -8,55 +8,68 @@ O ScamLens expõe uma REST API construída com FastAPI e servida por Uvicorn atr
 
 ```
 scamlens/
-├── api/                    # Handlers de rota organizados por domínio
-│   ├── analyze.py          # POST /analyze
-│   ├── analyze_qr.py       # POST /analyze/qr
-│   ├── auth.py             # /auth/*
-│   ├── user.py             # /profile, /history
-│   └── health.py           # /health
+├── api/
+│   ├── router/
+│   │   ├── auth.py          # /api/auth/* (register, login, logout, refresh)
+│   │   ├── users.py         # /api/user/* (me, avatar)
+│   │   ├── admin.py         # /api/admin/* (metrics, users, scans, logs)
+│   │   ├── system.py        # /, /favicon.ico, /health, /health/version
+│   │   └── scurl/
+│   │       ├── url.py       # POST /analyze/url (montado em /api/scurl)
+│   │       ├── qr.py        # POST /analyze/qr (montado em /api/scurl/qr)
+│   │       └── scans.py     # GET /scans, /scans/{id} (montado em /api/scurl)
+│   ├── middleware/
+│   │   ├── auth.py          # get_current_user / get_current_admin
+│   │   └── logging.py       # RequestLoggingMiddleware
+│   ├── limiter.py            # instância slowapi
+│   ├── path.py                # _STATIC, _STORAGE, _LOG_DIR
+│   └── server.py              # monta a app, lifespan, inclui routers
 ├── plugins/
-│   ├── math/               # Utilitários matemáticos compartilhados
-│   ├── scurl/              # Motor de análise de URLs
-│   └── scqr/               # Motor de análise de QR codes
-├── providers/              # I/O externo: HTTP, DNS, RDAP, SSL, SafeBrowsing, banco
-├── middleware/
-│   └── logging.py          # RequestLoggingMiddleware
+│   ├── math/                 # utilitários compartilhados (levenshtein, entropy, etc.)
+│   ├── scfs/                 # motor de scan de arquivos (CLI + engine próprios, não exposto pela API ainda)
+│   └── scurl/                # motor de análise de URL
+│       └── vendor/scqr/      # decoder de QR code, vendorizado dentro do scurl
+├── providers/                 # I/O externo: HTTP, DNS, RDAP, SSL, SafeBrowsing, banco
 └── scamLens/
-    └── config.toml         # Configuração da aplicação
+    └── config.toml            # configuração da aplicação
 ```
+
+`plugins/scqr` como motor irmão de `scurl` **não existe** — o scqr vive dentro de `plugins/scurl/vendor/scqr` e é chamado internamente pelo pipeline do scurl, não pela API diretamente. `plugins/scfs` existe e tem CLI e engine próprios, mas nenhuma rota da API o expõe hoje.
 
 ---
 
 ## Entrypoint e ciclo de vida
 
-A aplicação é inicializada em `server.py` via o padrão `lifespan` do FastAPI com `@asynccontextmanager`. O contexto de startup configura o handler de log em arquivo no logger do Uvicorn e inicializa o banco. O contexto de shutdown garante flush dos logs e fechamento limpo das conexões.
+Inicializamos a aplicação em `server.py` via `lifespan`. No startup, se `server.logs` estiver habilitado no `config.toml`, os handlers de log de arquivo são plugados nos loggers do uvicorn/fastapi; em seguida o banco é inicializado (`init_db()`) e o admin é garantido (`ensure_admin_exists()`). Não há rotina de shutdown/teardown — o bloco após o `yield` é vazio.
 
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_file_logging()
-    init_database()
+    if LOGS_ENABLED:
+        setup_logging_once(SESSION_LOG_FILE)
+    init_db()
+    conn = get_connection()
+    ensure_admin_exists(conn)
     yield
-    teardown_logging()
-
-app = FastAPI(lifespan=lifespan)
 ```
 
-Em produção (`SCAMLENS_ENV=production`), os endpoints `/docs` e `/redoc` são desabilitados automaticamente.
+Em produção (`SCAMLENS_ENV=production`), `docs_url`, `openapi_url` e `redoc_url` são setados para `None` na construção do `FastAPI(...)`.
 
 ---
 
 ## Rotas
 
-A API expõe cinco grupos de rotas:
+Todas as rotas de negócio vivem sob prefixo `/api`. Não utilizamosm `/analyze`, `/auth` ou `/profile` na raiz — quem tentar chamar assim recebe 404.
 
-| Grupo | Prefixo | Descrição |
-|-------|---------|-----------|
-| Análise de URL | `/analyze` | Submissão e resultado de análise de URLs |
-| Análise de QR | `/analyze/qr` | Upload e análise de imagens com QR code |
-| Autenticação | `/auth` | Registro, login, refresh, logout, verificação de email |
-| Usuário | `/profile`, `/history` | Dados do usuário autenticado e histórico de scans |
-| Health | `/health` | Liveness probe usado pelo Railway |
+| Grupo | Prefixo real | Descrição |
+|-------|--------------|-----------|
+| Análise de URL | `POST /api/scurl/analyze/url` | Submissão de URL para análise |
+| Análise de QR | `POST /api/scurl/qr/analyze/qr` | Upload de imagem, extração de URL do QR e análise |
+| Consulta de scans | `GET /api/scurl/scans`, `GET /api/scurl/scans/{id}` | Histórico público de scans |
+| Autenticação | `/api/auth/register`, `/login`, `/logout`, `/refresh` | Não utilizamos endpoint de verificação de e-mail |
+| Usuário | `GET /api/user/me`, `POST /api/user/avatar` | Perfil e avatar do usuário autenticado |
+| Admin | `/api/admin/metrics`, `/users`, `/scans`, `/request-logs`, `/logs`, `/logs/{filename}` | Painel administrativo, tudo com log de auditoria |
+| Sistema | `GET /`, `GET /favicon.ico`, `GET /health`, `GET /health/version` (admin) | Health check e liveness |
 
 ---
 
@@ -64,202 +77,169 @@ A API expõe cinco grupos de rotas:
 
 ### Estratégia de tokens
 
-A API usa JWT de curta duração (access token) combinado com refresh token rotativo de longa duração. Ambos são transmitidos como **cookies httpOnly**, não via `Authorization` header.
+JWT de curta duração (access) + JWT de longa duração (refresh), ambos autocontidos e assinados com `HS256`. Transmitidos como cookies httpOnly, **mas o middleware também aceita `Authorization: Bearer <token>` como fallback** para o access token — não é cookie-only como poderia parecer.
 
-| Token | Duração | Armazenamento servidor |
-|-------|---------|----------------------|
-| Access token (JWT) | 15 minutos | Sem estado — validado pela assinatura |
-| Refresh token | 7 dias | Hash armazenado na tabela `AUTH_TOKENS` |
+| Token | Duração | Revogação |
+|-------|---------|-----------|
+| Access token (JWT) | 30 minutos | Verificada via blocklist de `jti` em `revoked_tokens` no logout |
+| Refresh token | 30 dias (`remember=true`) ou 1 dia (`remember=false`) | Idem — `jti` inserido em `revoked_tokens` no logout, não há tabela de tokens ativos |
 
-O frontend JS faz requisições com `credentials: "include"`. Como a API e o frontend são same-origin, os cookies são enviados automaticamente em toda requisição, sem necessidade de interceptar requests para injetar headers. Isso também elimina o vetor de roubo de token via `localStorage` em cenários de XSS.
+Não utilizamos uma tabela de tokens ativos com hash do refresh token. O refresh token é stateless (JWT); o servidor só guarda uma **lista de `jti` revogados** (`revoked_tokens`, com `expires_at` para permitir limpeza via `purge_expired_tokens()`). Ou seja, a validade de um refresh token não revogado nunca é checada contra o banco — só a assinatura e o `exp` do JWT.
 
-### Fluxo
+### Fluxo real
 
 ```
-POST /auth/login
-  → valida credenciais (bcrypt)
-  → emite access JWT + refresh token
-  → seta cookies httpOnly na resposta
+POST /api/auth/register
+  → hash da senha (bcrypt), cria usuário, seta cookies (remember=False)
+
+POST /api/auth/login
+  → busca usuário por email; se não existir, ainda roda bcrypt contra um hash
+    dummy (_DUMMY_HASH) para não vazar timing de "email existe vs não existe"
+  → verifica is_active
+  → seta cookies (access_token, refresh_token)
 
 Requisição autenticada
-  → access token lido do cookie
-  → validado via dependency get_current_user
+  → get_current_user lê cookie access_token OU header Authorization: Bearer
+  → decode_token valida assinatura/tipo; se refresh, checa jti em revoked_tokens
+  → busca usuário no banco, checa is_active
 
-POST /auth/refresh
-  → valida hash do refresh token em AUTH_TOKENS
-  → revoga o token atual
-  → emite novo par, atualiza cookies
+POST /api/auth/refresh
+  → decodifica o refresh token (sem lookup em tabela de refresh ativos)
+  → emite novo par de tokens
 
-POST /auth/logout
-  → marca refresh token como revogado
-  → limpa cookies
+POST /api/auth/logout
+  → revoga jti do access token e do refresh token em revoked_tokens
+  → limpa os dois cookies
 ```
 
-### Proteção de rotas
+### Verificação de e-mail
 
-Rotas protegidas declaram `Depends(get_current_user)`. A dependency decodifica o JWT, busca o usuário no banco e retorna o objeto `User`. Se o token estiver ausente, expirado ou inválido, levanta `HTTPException(401)` antes de o handler ser executado.
-
-Rotas públicas não usam a dependency mas ainda são submetidas à quota anônima por IP.
-
-### Verificação de email
-
-No registro, um token de verificação é gerado, armazenado como hash em `USERS` e enviado por email via **Resend**. O endpoint `GET /auth/verify?token=...` valida o token (single-use) e marca `email_verified = true` no banco.
+**Não utilizamos no código atual.** Não há endpoint `/verify`, não há coluna `email_verified` em `users`, e não há integração com Resend nesta versão do repositório. Se isso já foi implementado em algum branch/versão anterior, não está no `main` hoje — não consideramos esse recurso como parte da versão atual.
 
 ---
 
 ## Pipeline de análise de URL
 
-O handler `POST /analyze` valida a quota do requisitante, consulta o cache e, em caso de miss, delega para `scurl.run_engine()`.
+`POST /api/scurl/analyze/url` roda em `api/router/scurl/url.py`, chamando `plugins.scurl.run_engine()` dentro de um `run_in_executor` (a engine é síncrona) e sob um `asyncio.Semaphore(20)`. Se o semáforo já estiver saturado (`.locked()`), o handler devolve `503` **antes mesmo de tentar adquiri-lo** — ou seja, sob carga alta ele já recusa de cara em vez de enfileirar.
 
 ```
-POST /analyze
+POST /api/scurl/analyze/url
       │
       ▼
-check_quota         → quota anônima (por IP) ou autenticada (por user_id + plano)
+rejeita URL > 100 caracteres (422)
       │
       ▼
-cache_lookup        → SHA-256(url_normalizada) → hit retorna resultado direto
+tenta autenticar (get_current_user); falha silenciosa → tratado como anônimo
       │
       ▼
-scurl.run_engine()  → validate_url → collect → execute → context_apply → score → response_builder
+anônimo: is_quota_exceeded(ip)      → 401 se estourou (3/dia hardcoded)
+autenticado: is_usage_exceeded(...) → 429 se estourou o limite do plano
       │
       ▼
-persist_result      → grava em SCANS, incrementa DAILY_USAGE / ANONYMOUS_QUOTA
+se semáforo já lotado → 503 imediato
       │
       ▼
-return ScanResult
+run_engine(url, use_cache=...)   → validate_input_qr → validate_url → collect
+                                    → execute_rules → score → build_response
+                                    (a própria engine já persiste o resultado
+                                     via providers.database.cache dentro dela)
+      │
+      ▼
+increment_usage / increment_anonymous_count
+      │
+      ▼
+save_scan() é chamado de novo pelo router (best-effort, com try/except mudo)
+      │
+      ▼
+return AnalyzeResponse
 ```
 
-A consulta e a gravação no cache são feitas pela API, não pelo motor — `scurl` é stateless e não conhece o banco do ScamLens.
+**Atualmente, a arquitetura foi projetada de forma que:** `scurl` não é stateless em relação ao banco. `plugins/scurl/engine/main.py` importa `providers.database.cache` e chama `persist_scan()` diretamente dentro do próprio `run_engine()`. O router então chama `save_scan()` de novo depois. Atualmente mantemos essa duplicação de persistência por compatibilidade, com intenção de centralizar essa responsabilidade futuramente — pretendemos revisar se é intencional (idempotência via `url_hash UNIQUE`?) ou dívida técnica.
+
+Não utilizamos uma tabela `URL_CACHE` separada: cache e resultado persistido são a mesma linha na tabela `scans` (`url_hash UNIQUE`), consultada por `find_by_hash()`.
 
 ---
 
 ## Pipeline de análise de QR code
 
-O handler `POST /analyze/qr` recebe um upload `multipart/form-data`, valida o arquivo, decodifica o QR e roteia o payload para o pipeline correspondente ao tipo detectado.
+`POST /api/scurl/qr/analyze/qr` (em `api/router/scurl/qr.py`) lê os bytes do upload e chama **o mesmo `plugins.scurl.run_engine()`**, passando os bytes brutos como `source` e `use_cache=False`. Não há validação de magic bytes no nível do router, nem uma pipeline de QR separada da de URL — tudo acontece dentro de `run_engine`, no estágio `validate_input_qr`:
 
 ```
-POST /analyze/qr
+run_engine(bytes)
       │
       ▼
-check_quota
+validate_input_qr(source)
       │
-      ▼
-validate_file       → magic bytes (não Content-Type): JPEG, PNG, GIF, WebP, SVG
+      ├─ se source já é uma URL string → passa direto
       │
-      ▼
-scqr.decode()       → pyzbar (primário) → zxingcpp (fallback silencioso)
-      │
-      ▼
-classify_qrcode     → detecta tipo: url, pix, email, phone, wifi, contact, calendar, sms, json, text
-      │
-      ▼
-analyze_qrcode      → pipeline por tipo
-      │              (payload url → scurl.run_engine())
-      ▼
-persist_result      → grava em QR_SCANS
-      │
-      ▼
-return QrScanResult
+      └─ se é bytes → plugins.scurl.vendor.scqr.engine.main.run_engine(data)
+              │
+              ▼
+        scqr decodifica e classifica o tipo do QR
+              │
+              ▼
+        qr_type != "url"  → erro "unsupported_qr_type" (fluxo TERMINA aqui)
+        qr_type == "url"  → extrai a URL decodificada
+              │
+              ▼
+segue o pipeline normal de análise de URL (validate_url → collect → ... )
 ```
 
-### Validação de arquivo
-
-O tipo do arquivo é determinado por **magic bytes**, não pelo `Content-Type` declarado pelo cliente, que é totalmente controlável pelo requisitante. SVGs são convertidos via `cairosvg` para PNG antes de serem passados ao decoder.
-
-### Decoder com fallback
-
-`pyzbar` é o decoder primário. Em caso de falha de decodificação, `zxingcpp` é tentado silenciosamente — ele tem suporte a mais variantes de QR mas causa crash por instrução AVX no hardware de produção atual (Pentium P6200, sem suporte a AVX). O fallback é encapsulado em `try/except` com supressão explícita do erro.
-
-### Classificador de tipo
-
-O classificador mapeia o payload decodificado para uma categoria antes de roteá-lo:
-
-| Tipo | Critério de detecção |
-|------|---------------------|
-| `url` | Prefix `http://`, `https://`, `ftp://` |
-| `pix` | Prefix `000201` (padrão EMV QR) |
-| `email` | Prefix `MAILTO:` |
-| `phone` | Prefix `TEL:` |
-| `wifi` | Prefix `WIFI:` |
-| `contact` | `BEGIN:VCARD` |
-| `calendar` | `BEGIN:VEVENT` |
-| `sms` | `SMSTO:` ou `SMS:` |
-| `json` | JSON válido |
-| `text` | Fallback |
-
-Payloads do tipo `url` são delegados integralmente ao `scurl.run_engine()`, passando pelo pipeline completo de análise de URL.
+**Isso é a divergência mais importante do documento anterior:** o `scqr` de fato classifica múltiplos tipos de payload (pix, email, phone, wifi, contact, calendar, sms, json, text — isso existe no vendor), mas **a integração atual com a API só aceita o tipo `url`**. QR codes de Pix, vCard, Wi-Fi etc. são decodificados e depois **rejeitados com erro**, não analisados. Se o suporte a outros tipos é uma feature planejada, ela não está ligada na API hoje.
 
 ---
 
 ## Rate limiting e quotas
 
-O controle de uso opera em dois níveis independentes.
+Dois níveis independentes, ambos confirmados no código:
 
-**Nível 1 — Rate limit por requisição** via `slowapi`. Aplicado por IP antes de qualquer lógica de negócio. Estouro retorna `429` com header `Retry-After`.
+**Nível 1 — `slowapi`**, por IP, configurável via `config.toml` (`rate_limit.enabled`, `rate_limit.requests_per_minute`). Se desabilitado, o limite efetivo vira `99999/minute` (na prática, sem limite).
 
-**Nível 2 — Quota diária** verificada no banco antes de executar a análise. Usuários anônimos são identificados por IP (`ANONYMOUS_QUOTA`); usuários autenticados por `user_id` (`DAILY_USAGE`). O limite diário de cada plano é lido dinamicamente da tabela `PLANS` — não é hardcoded.
+**Nível 2 — quota diária no banco**, com duas fontes de verdade diferentes:
+- Anônimo: `ANONYMOUS_LIMIT = 3`, **hardcoded em `providers/database/quota.py`**, contado por IP em `anonymous_quota`.
+- Autenticado: `PLAN_LIMITS = {"standard": 5, "go_pro": 25, "plus_premium": None}`, **também hardcoded em Python**, em `providers/database/usage.py`, contado por `(user_id, module, date)` em `daily_usage`.
 
-```
-Usuário anônimo:     máximo de 3 scans/dia por IP
-Usuário autenticado: limite definido pelo plano (PLANS.daily_scan_limit)
-```
+A tabela `plans` **não tem coluna de limite** (só `name`, `label`, `price`). Ou seja, mudar o limite de um plano hoje exige editar código e fazer deploy, não é dado de configuração/banco. Se a intenção é permitir configurar isso sem deploy, essa é uma dívida real a resolver.
 
-Além disso, um `asyncio.Semaphore` limita o número de análises em execução simultânea, evitando que picos de tráfego saturem os providers externos:
-
-```python
-semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
-
-async def analyze(...):
-    async with semaphore:
-        result = await run_engine(url)
-```
+Além disso, `MAX_CONCURRENT_SCANS = 20` limita análises simultâneas via `asyncio.Semaphore`, com verificação de `.locked()` antes de tentar entrar (retorna 503 em vez de enfileirar/esperar).
 
 ---
 
 ## Cache
 
-Resultados de análise são cacheados por `SHA-256(url_normalizada)` na tabela `URL_CACHE`. Um hit de cache retorna o resultado armazenado sem executar nenhum estágio do pipeline — nem coleta, nem heurísticas, nem scoring.
-
-A chave SHA-256 garante que variações superficiais da mesma URL (trailing slash, capitalização de scheme) que normalizam para a mesma forma não gerem entradas duplicadas.
+Resultados são cacheados por `SHA-256` da URL (campo `url_hash UNIQUE` na tabela `scans`). Não utilizamos tabela `URL_CACHE` separada — cache e histórico de resultado são a mesma linha. Um hit (`find_by_hash`) devolve o resultado salvo sem rodar o pipeline de novo. No fluxo de QR, o cache é sempre ignorado (`use_cache=False` fixo no router).
 
 ---
 
 ## Middleware de logging
 
-`RequestLoggingMiddleware` intercepta todas as requisições HTTP no nível do ASGI, independente de rota ou resultado. Registra IP, método, path, status code, user-agent e latência em milissegundos na tabela `request_logs`.
-
-Esse log é distinto do `API_LOGS`, que opera no nível de rota e inclui `user_id` e contexto de negócio (endpoint, resultado da operação). Os dois coexistem: `request_logs` para observabilidade de infraestrutura, `API_LOGS` para auditoria de uso.
+`RequestLoggingMiddleware` (em `api/middleware/logging.py`) só é registrado se `server.logs` estiver habilitado no `config.toml`. Grava em `request_logs`. **Não utilizamos uma tabela `API_LOGS` separada** para contexto de negócio por rota — o único log de requisição é o `request_logs`, e o único outro log estruturado é `admin_audit_log`, que registra ações administrativas (`read_users`, `set_active`, `change_plan`, `read_scans`, `read_logs`, `list_logs`, `read_log`), não uso geral da API por usuários comuns.
 
 ---
 
 ## Banco de dados
 
-O banco é SQLite em modo WAL (Write-Ahead Logging), rodando em volume persistente no Railway. WAL permite leituras concorrentes enquanto uma escrita está em andamento — relevante para uma API que lê histórico ao mesmo tempo em que grava novos resultados.
+SQLite, com `init_db()` cuidando de schema + migrações (ordem: schema antes de migrations). Conexões são obtidas via `get_connection()` em `providers/database/connection.py` (thread-local, conforme documentado anteriormente e não contestado aqui).
 
-Conexões são **thread-local**: cada thread do pool do Uvicorn mantém sua própria conexão, contornando a restrição de afinidade de thread do SQLite sem necessidade de driver assíncrono.
-
-### Esquema de tabelas
+### Esquema de tabelas real (nomes exatamente como estão no `.sql`, minúsculos)
 
 | Tabela | Descrição |
 |--------|-----------|
-| `PLANS` | Planos disponíveis com limites e features |
-| `USERS` | Contas de usuário, hash de senha, referência ao plano |
-| `AUTH_TOKENS` | Hash dos refresh tokens ativos e revogados |
-| `SCANS` | Resultados de análises de URL por usuário |
-| `QR_SCANS` | Resultados de análises de QR code por usuário |
-| `DAILY_USAGE` | Contador de scans diários por usuário autenticado |
-| `ANONYMOUS_QUOTA` | Contador de scans diários por IP anônimo |
-| `URL_CACHE` | Cache de resultados por SHA-256 da URL normalizada |
-| `API_LOGS` | Log de operações por rota com contexto de negócio |
-| `request_logs` | Log de todas as requisições HTTP (middleware-level) |
+| `plans` | `id, name, label, price, created_at` — sem coluna de limite de uso |
+| `users` | conta, hash de senha, `plan_id`, `is_active` — sem `email_verified` |
+| `revoked_tokens` | blocklist de `jti` revogados (access e refresh), com `expires_at` para purga |
+| `scans` | resultado de análise de URL, `url_hash UNIQUE` — funciona como cache e histórico ao mesmo tempo |
+| `daily_usage` | contador por `(user_id, module, date)` |
+| `anonymous_quota` | contador por IP |
+| `request_logs` | log de requisições HTTP (IP, endpoint, método, user_id, scan_id, status, timestamp) |
+| `admin_audit_log` | log de ações administrativas |
+
+Não utilizamosm tabelas `AUTH_TOKENS`, `QR_SCANS`, `URL_CACHE` ou `API_LOGS`.
 
 ---
 
 ## Infraestrutura e deploy
 
-A aplicação roda no Railway em um único dyno. O Nginx faz TLS termination e serve arquivos estáticos do frontend diretamente, repassando requisições de API para o Uvicorn via proxy reverso.
+Railway + Nginx (TLS termination, arquivos estáticos do frontend, proxy reverso pro Uvicorn) — não verificado linha a linha nesta auditoria (fora do repo do backend), mantido do documento anterior por ser consistente com o restante do projeto.
 
-Logs de arquivo são registrados via hooks no logger do Uvicorn, inicializados no contexto `lifespan`. Isso garante que o handler de arquivo esteja ativo antes de qualquer requisição ser processada e seja fechado corretamente no shutdown.
-
-O endpoint `/docs` (Swagger UI gerado automaticamente pelo FastAPI) é desabilitado em produção via variável de ambiente `SCAMLENS_ENV=production`, evitando exposição do schema da API publicamente.
+`/docs`, `/redoc` e `/openapi.json` são desabilitados em produção via `SCAMLENS_ENV=production`, confirmado em `scamLens/__init__.py::get_settings()`.

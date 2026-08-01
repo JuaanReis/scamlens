@@ -2,7 +2,7 @@
 host = "0.0.0.0"
 port = 8000
 workers = 1
-reload = true
+reload = false
 logs = true
 
 [cors]
@@ -12,7 +12,7 @@ max_age = 600
 expose_headers = []
 allow_methods = ["*"]
 allow_headers = ["*"]
-allow_origins = ["*"]
+allow_origins = []
 
 [cache]
 enabled = true
@@ -25,6 +25,38 @@ requests_per_minute = 10
 secure = true
 samesite = "lax"
 httponly = true
+ttl_minutes = 30 # access token
+ttl_days = 30 # refresh token
 
 [logging]
 trust_proxy = false
+
+[paths]
+storage = "providers/storage"
+avatar = "providers/storage/avatars"
+logs = "providers/storage/logs"
+static = "api/static"
+scamlens_db_path = "providers/storage/db/scamlens.db"
+
+[rdap]
+max_concurrent_per_server = 8
+fallback_max_concurrent = 4
+
+[scurl]
+[scurl.scanner]
+timeout = 6.0
+threads = 2
+k = 5
+retries = 3
+follow_redirects = true
+verify_ssl = true
+http2 = false
+cache = true
+max_redirects = 10
+
+[scurl.output]
+colors = true
+
+[scurl.security]
+allow_private_ips = false
+allow_localhost = false

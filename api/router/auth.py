@@ -13,13 +13,22 @@ from scamLens import get_settings
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
+cookie_config = config.get("cookies", {})
+secure = cookie_config.get("secure", True)
+samesite = cookie_config.get("samesite", "lax")
+httponly = cookie_config.get("httponly", True)
+ttl_minutes = cookie_config.get("ttl_minutes", 30)
+ttl_days = cookie_config.get("ttl_days", 30)
+
+COOKIE_KWARGS = {"httponly": httponly, "secure": secure, "samesite": samesite}
+
 SECRET_KEY = settings.jwt_secret
 if not SECRET_KEY:
     raise RuntimeError("SERVER ERROR JWT_SECRET not defined in the environment")
 
 ALGORITHM = "HS256"
-ACCESS_TTL = timedelta(minutes=30)
-REFRESH_TTL = timedelta(days=30)
+ACCESS_TTL = timedelta(minutes=ttl_minutes)
+REFRESH_TTL = timedelta(days=ttl_days)
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
 
 def hash_password(password: str) -> str:
@@ -27,13 +36,6 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
-
-cookie_config = config.get("cookies", {})
-secure = cookie_config.get("secure", True)
-samesite = cookie_config.get("samesite", "lax")
-httponly = cookie_config.get("httponly", True)
-
-COOKIE_KWARGS = {"httponly": httponly, "secure": secure, "samesite": samesite}
 
 def _make_token(user_id: int, ttl: timedelta, token_type: str, remember: bool = False) -> str:
     expire = datetime.now(timezone.utc) + ttl
@@ -86,6 +88,7 @@ def decode_token(token: str, expected_type: str) -> dict:
 def _revoke_if_valid(token: str | None, expected_type: str) -> None:
     if not token:
         return
+    
     try:
         payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") == expected_type:
@@ -107,7 +110,7 @@ def register(body: RegisterBody, response: Response):
 
     _set_cookies(response, user["id"], remember=False)
     return {"id": user["id"], "email": user["email"], "name": user["name"]}
- 
+
 @router.post("/login")
 def login(body: LoginBody, response: Response):
     user = get_user_by_email(body.email)

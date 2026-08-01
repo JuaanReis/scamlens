@@ -10,3 +10,5 @@ def run_engine(source: Path | bytes, file_hint: Optional[str] = None) -> dict:
     
     if error := validate_input(ctx):
         return error
+    
+    return ctx

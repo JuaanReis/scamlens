@@ -1,14 +1,15 @@
-import re
+from re import compile
 from uuid import uuid4
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from api.middleware.auth import get_current_user
 from providers.database.repository import get_user_activity
 from providers.database.users import update_avatar
+from scamLens import config
 
 router = APIRouter(prefix="/api/user", tags=["users"])
 
-AVATARS_DIR = Path("providers/database/storage/avatars")
+AVATARS_DIR = Path(config.get("paths", {}).get("avatar", ""))
 MAX_SIZE_BYTES = 2 * 1024 * 1024 
 
 ALLOWED_SIGNATURES: list[tuple[bytes, str, str]] = [
@@ -19,7 +20,7 @@ ALLOWED_SIGNATURES: list[tuple[bytes, str, str]] = [
     (b"GIF89a", "gif",  "image/gif"),
 ]
 
-_AVATAR_FILENAME_RE = re.compile(r"^\d+_[0-9a-f]{32}\.(jpg|png|webp|gif)$")
+_AVATAR_FILENAME_RE = compile(r"^\d+_[0-9a-f]{32}\.(jpg|png|webp|gif)$")
 
 def _detect(data: bytes) -> tuple[str, str] | None:
     for magic, ext, mime in ALLOWED_SIGNATURES:
@@ -72,7 +73,7 @@ async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_c
 
     path.write_bytes(contents)
 
-    avatar_url = f"/storage/avatars/{filename}"
+    avatar_url = f"{AVATARS_DIR}/{filename}"
     update_avatar(user["id"], avatar_url)
 
     return {"avatar_url": avatar_url}

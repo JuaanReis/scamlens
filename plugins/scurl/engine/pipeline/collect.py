@@ -9,8 +9,9 @@ from providers.ssl.info_ssl import get_ssl_cert
 from providers.dns.info_dns import get_dns_info
 from plugins.scurl.engine.pipeline.validate_url import resolve_and_validate_host
 from urllib.parse import urlparse
+from plugins.scurl import config
 
-MAX_REDIRECTS = 10
+MAX_REDIRECTS = config.get("scanner", {}).get("max_redirects", 10)
 
 def _is_safe_redirect(location: str) -> bool:
     parsed = urlparse(location)
