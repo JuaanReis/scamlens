@@ -3,7 +3,7 @@ host = "0.0.0.0"
 port = 8000
 workers = 1
 reload = false
-logs = true
+logs = false
 
 [cors]
 enabled = true
@@ -13,9 +13,6 @@ expose_headers = []
 allow_methods = ["*"]
 allow_headers = ["*"]
 allow_origins = []
-
-[cache]
-enabled = true
 
 [rate_limit]
 enabled = true
@@ -27,6 +24,13 @@ samesite = "lax"
 httponly = true
 ttl_minutes = 30 # access token
 ttl_days = 30 # refresh token
+
+[http]
+retries = 3
+follow_redirects = true
+verify_ssl = true
+http2 = false
+max_redirects = 10
 
 [logging]
 trust_proxy = false
@@ -45,14 +49,9 @@ fallback_max_concurrent = 4
 [scurl]
 [scurl.scanner]
 timeout = 6.0
-threads = 2
-k = 5
-retries = 3
-follow_redirects = true
-verify_ssl = true
-http2 = false
+threads = 5
 cache = true
-max_redirects = 10
+k = 5
 
 [scurl.output]
 colors = true
