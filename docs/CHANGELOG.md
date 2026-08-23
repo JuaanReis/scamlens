@@ -30,3 +30,17 @@
 - Motor `scfs` (scan de arquivos) como módulo interno, ainda sem rota na API nem CLI publicado
 - Configuração runtime centralizada via `config.toml` (server, CORS, cache, rate limit, cookies)
 - Desabilitação automática de `/docs`, `/redoc` e `/openapi.json` em produção (`SCAMLENS_ENV=production`)
+
+## [1.8.0]
+
+### Adicionado
+
+- Logging de requisições HTTP reorganizado em módulos para identificação do cliente, persistência no banco e middleware
+- Registro detalhado das requisições do scanner, incluindo método, URL sanitizada, status, tentativas, duração, IP, usuário e user-agent
+- Sanitização de parâmetros sensíveis (`key`, `api_key`, `apikey`, `token` e `access_token`) nas URLs registradas em log
+- Nova função HTTP genérica para requisições `GET` e `POST`, com suporte a payload JSON, retries e backoff
+- Resultado HTTP extraído para módulo próprio, incluindo headers, corpo, tempo de resposta e cadeia de redirecionamentos
+- Configuração centralizada de timeout, conexão, leitura, limite de conexões, redirecionamentos e rotação de user-agent no cliente HTTP
+- Desativação do seguimento automático de redirecionamentos no cliente HTTP, mantendo o controle de redirecionamentos no scanner
+- Restrição da leitura de arquivos do painel administrativo a arquivos `.log` existentes dentro do diretório de logs
+- Ajuste do limite de concorrência do scanner de URLs de 5 para 3 threads

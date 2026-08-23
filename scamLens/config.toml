@@ -3,7 +3,7 @@ host = "0.0.0.0"
 port = 8000
 workers = 1
 reload = false
-logs = false
+logs = true
 
 [cors]
 enabled = true
@@ -31,6 +31,12 @@ follow_redirects = true
 verify_ssl = true
 http2 = false
 max_redirects = 10
+timeout = 6.0
+connect = 1.5
+read = 3.0
+max_keepalive_connections = 20
+max_connections = 50
+rotate_user_agent = true
 
 [logging]
 trust_proxy = false
@@ -49,7 +55,7 @@ fallback_max_concurrent = 4
 [scurl]
 [scurl.scanner]
 timeout = 6.0
-threads = 5
+threads = 3
 cache = true
 k = 5
 

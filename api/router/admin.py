@@ -81,13 +81,18 @@ def get_logs(
     return [dict(r) for r in rows]
 
 def _safe_log_path(filename: str) -> Path:
-    candidate = (_LOG_DIR / filename).resolve()
     base = _LOG_DIR.resolve()
+    candidate = (base / filename).resolve()
 
-    if base not in candidate.parents and candidate != base:
-        raise HTTPException(status_code=400, detail="invalid filename")
-    if not candidate.is_file():
-        raise HTTPException(status_code=404, detail="log file not found")
+    if (
+        base not in candidate.parents
+        or candidate.suffix.lower() != ".log"
+        or not candidate.is_file()
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="log file not found",
+        )
 
     return candidate
 

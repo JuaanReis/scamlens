@@ -1,7 +1,7 @@
 from plugins.scurl.models.scan_context import ScanContext
 from plugins.scurl.engine.pipeline.validate_response import response_validator
 from plugins.scurl.engine.pipeline.target_structure import get_structure
-from providers.http.connect import get_response
+from providers.http.connect import request
 from providers.rdap.fetch_rdap import fetch_rdap
 from plugins.scurl.parsers.html_parser import parse_html
 from providers.safebrowsing.client import fetch_safe_browsing
@@ -31,7 +31,8 @@ def _fetch_with_redirect_guard(url: str, timeout: float, retries: int) -> object
     hops = 0
 
     while hops < MAX_REDIRECTS:
-        response = get_response(
+        response = request(
+            method="GET",
             url=current_url,
             timeout=timeout,
             retries=retries,

@@ -1,9 +1,7 @@
+from api.logs import LOGS_ENABLED, initialize_logging
 from scamLens import __version__, config
-from pathlib import Path
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
-from os import getpid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,7 +11,6 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sys import platform
 import uvicorn
-from time import perf_counter
 from api.limiter import limiter
 from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
@@ -22,68 +19,30 @@ from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
-from api.middleware.logging import RequestLoggingMiddleware, RequestTimerMiddleware
+from api.middleware.logging.logging import RequestLoggingMiddleware
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from scamLens import get_settings
-from .path import _LOG_DIR, _STATIC, _STORAGE
-
+from .path import _STATIC, _STORAGE
 settings = get_settings()
-
-_initialized_logging = False
-
-SESSION_LOG_FILE = None
-LOGS_ENABLED = config.get("server", {}).get("logs", False)
-if LOGS_ENABLED:
-    _LOG_DIR.mkdir(parents=True, exist_ok=True)
-    SESSION_LOG_FILE = _LOG_DIR / (
-        f"sl_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_pid{getpid()}.log"
-    )
-
-START = perf_counter()
-    
-class PerfCounterFilter(logging.Filter):
-    def filter(self, record):
-        record.elapsed = f"{perf_counter() - START:.3f}ms"
-        return True
-    
-def setup_logging_once(log_file: Path):
-    global _initialized_logging
-
-    if _initialized_logging:
-        return
-
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.addFilter(PerfCounterFilter())
-    file_handler.setFormatter(
-        logging.Formatter(
-            "[%(elapsed)s] %(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        )
-    )
-
-    for name in ("uvicorn", "uvicorn.error", "fastapi", "api.request"):
-        logger = logging.getLogger(name)
-        logger.handlers.clear()
-        logger.addHandler(file_handler)
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
-
-    _initialized_logging = True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
     if LOGS_ENABLED:
-        setup_logging_once(SESSION_LOG_FILE)
+        initialize_logging()
 
     try:
         init_db()
     except Exception as e:
         if LOGS_ENABLED:
-            logging.exception(f"Database initialization failed: {e}")
+            logging.exception(
+                f"Database initialization failed: {e}"
+            )
         raise
 
     conn = get_connection()
-    ensure_admin_exists(conn)   
+    ensure_admin_exists(conn)
 
     yield
 
@@ -108,7 +67,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 if LOGS_ENABLED:
-    app.add_middleware(RequestTimerMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
 
 cors_config = config.get("cors", {})

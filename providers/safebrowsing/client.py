@@ -1,5 +1,5 @@
 from json import loads
-from ..http.connect import post_response
+from ..http.connect import request
 from scamLens import get_settings
 
 settings = get_settings()
@@ -28,8 +28,9 @@ def fetch_safe_browsing(url: str) -> dict | None:
     }
 
     try:
-        r = post_response(
-            f"{_ENDPOINT}?key={api_key}",
+        r = request(
+            method="POST",
+            url=f"{_ENDPOINT}?key={api_key}",
             data=payload,
             timeout=5
         )
