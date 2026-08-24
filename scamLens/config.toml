@@ -38,6 +38,19 @@ max_keepalive_connections = 20
 max_connections = 50
 rotate_user_agent = true
 
+[rdap]
+http2 = true
+verify = true
+follow_redirects = true
+connect = 2.0
+read = 3.0
+write = 2.0
+pool = 1.0
+max_keepalive_connections = 20
+max_connections = 120
+max_concurrent_per_server = 8
+fallback_max_concurrent = 4
+
 [logging]
 trust_proxy = false
 
@@ -48,16 +61,12 @@ logs = "providers/storage/logs"
 static = "api/static"
 scamlens_db_path = "providers/storage/db/scamlens.db"
 
-[rdap]
-max_concurrent_per_server = 8
-fallback_max_concurrent = 4
-
 [scurl]
 [scurl.scanner]
 timeout = 6.0
 threads = 3
 cache = true
-k = 5
+k = 5 # 
 
 [scurl.output]
 colors = true

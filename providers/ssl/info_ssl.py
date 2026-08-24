@@ -2,7 +2,7 @@ import ssl
 import socket
 import hashlib
 from datetime import datetime, timezone
-from plugins.scurl.parsers.parse_issue_ssl import parse_issuer
+from providers.ssl.parse_issue_ssl import parse_issuer
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448

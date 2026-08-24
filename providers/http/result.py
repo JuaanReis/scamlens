@@ -1,4 +1,4 @@
-from plugins.scurl.models.http_result import HTTPResult
+from providers.http.http_result import HTTPResult
 
 def extract_redirect_chain(response) -> list:
     chain = [

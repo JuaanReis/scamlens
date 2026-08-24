@@ -1,10 +1,12 @@
 from .client import rdap_client
 import threading
+import httpx
 import tldextract
 from scamLens import config
 
-_MAX_CONCURRENT_PER_SERVER = config.get("rdap", {}).get("max_concurrent_per_server", 8)
-_FALLBACK_MAX_CONCURRENT = config.get("rdap", {}).get("fallback_max_concurrent", 4)
+_rdap_config = config.get("rdap", {})
+_MAX_CONCURRENT_PER_SERVER = _rdap_config.get("max_concurrent_per_server", 8)
+_FALLBACK_MAX_CONCURRENT = _rdap_config.get("fallback_max_concurrent", 4)
 
 _RDAP_SERVERS: dict[str, str] = {
     "com":  "https://rdap.verisign.com/com/v1/domain/",
@@ -25,10 +27,8 @@ _RDAP_SERVERS: dict[str, str] = {
 }
 
 _RDAP_FALLBACK = "https://rdap.org/domain/"
-
 _cache: dict[str, dict | None] = {}
 _cache_lock = threading.Lock()
-
 _semaphores: dict[str, threading.Semaphore] = {}
 _sem_lock = threading.Lock()
 
@@ -41,7 +41,7 @@ def _get_semaphore(server_base: str) -> threading.Semaphore:
 
 def _server_base(url: str) -> str:
     parts = url.split("/")
-    return "/".join(parts[:3])  
+    return "/".join(parts[:3])
 
 def resolve_rdap_url(hostname: str) -> tuple[str, str]:
     extracted = tldextract.extract(hostname)
@@ -59,11 +59,13 @@ def fetch_rdap(hostname: str) -> dict | None:
     with _cache_lock:
         if registered in _cache:
             return _cache[registered]
-        
+
     server_base = _server_base(rdap_url)
     sem = _get_semaphore(server_base)
 
     result = None
+    should_cache = True
+
     with sem:
         with _cache_lock:
             if registered in _cache:
@@ -74,11 +76,29 @@ def fetch_rdap(hostname: str) -> dict | None:
             response.raise_for_status()
             data = response.json()
             result = None if "errorCode" in data else data
+
+        except httpx.PoolTimeout:
+            result = None
+            should_cache = False
+
+        except httpx.TimeoutException:
+            result = None
+            should_cache = False
+
+        except httpx.HTTPStatusError as e:
+            if e.response is not None and e.response.status_code >= 500:
+                result = None
+                should_cache = False
+            else:
+                result = None
+
         except Exception:
             result = None
+            should_cache = False
 
-    with _cache_lock:
-        _cache[registered] = result
+    if should_cache:
+        with _cache_lock:
+            _cache[registered] = result
 
     return result
 

@@ -1,5 +1,5 @@
 from time import time
-from plugins.scurl.models.http_result import HTTPResult
+from providers.http.http_result import HTTPResult
 from plugins.scurl import __version__
 
 def _typeError_request(status_code: int) -> tuple[str, str]:

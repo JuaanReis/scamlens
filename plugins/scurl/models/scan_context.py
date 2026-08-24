@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from time import time
 from urllib.parse import ParseResult, urlparse, urlunparse
-from plugins.scurl.models.http_result import HTTPResult
+from providers.http.http_result import HTTPResult
 
 @dataclass
 class TargetData:
