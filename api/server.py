@@ -23,7 +23,7 @@ from api.middleware.logging.logging import RequestLoggingMiddleware
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from scamLens import get_settings
-from .path import _STATIC, _STORAGE
+from .path import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
@@ -59,7 +59,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 app.mount("/storage", StaticFiles(directory=str(_STORAGE)), name="storage")
 
 app.state.limiter = limiter
@@ -73,7 +73,7 @@ cors_config = config.get("cors", {})
 if cors_config.get("enabled", True):
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_config.get("allow_origins", []),
+        allow_origins=cors_config["allow_origins"],
         allow_credentials=cors_config.get("allow_credentials", False),
         allow_methods=cors_config.get("allow_methods", ["*"]),
         allow_headers=cors_config.get("allow_headers", ["*"]),

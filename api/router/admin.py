@@ -6,7 +6,7 @@ from providers.database.connection import get_connection
 from providers.database.users import list_users, set_user_active, update_user_plan, get_global_metrics
 from providers.database.repository import list_scans
 from fastapi.responses import PlainTextResponse
-from ..path import _LOG_DIR
+from ..path import LOG_DIR
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -81,7 +81,7 @@ def get_logs(
     return [dict(r) for r in rows]
 
 def _safe_log_path(filename: str) -> Path:
-    base = _LOG_DIR.resolve()
+    base = LOG_DIR.resolve()
     candidate = (base / filename).resolve()
 
     if (
@@ -101,7 +101,7 @@ def list_logs(admin=Depends(get_current_admin)):
     _audit(admin["id"], "list_logs")
 
     files = []
-    for f in sorted(_LOG_DIR.glob("*.log")):
+    for f in sorted(LOG_DIR.glob("*.log")):
         stat = f.stat()
         files.append({
             "name": f.name,

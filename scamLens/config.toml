@@ -3,7 +3,10 @@ host = "0.0.0.0"
 port = 8000
 workers = 1
 reload = false
-logs = true
+
+[logs]
+enabled = true
+level = "INFO"
 
 [cors]
 enabled = true
@@ -39,7 +42,7 @@ max_connections = 50
 rotate_user_agent = true
 
 [rdap]
-http2 = true
+http2 = false
 verify = true
 follow_redirects = true
 connect = 2.0
@@ -48,8 +51,8 @@ write = 2.0
 pool = 1.0
 max_keepalive_connections = 20
 max_connections = 120
-max_concurrent_per_server = 8
-fallback_max_concurrent = 4
+max_concurrent_per_server = 16
+fallback_max_concurrent = 8
 
 [logging]
 trust_proxy = false
@@ -66,7 +69,7 @@ scamlens_db_path = "providers/storage/db/scamlens.db"
 timeout = 6.0
 threads = 3
 cache = true
-k = 5 # 
+k = 5 
 
 [scurl.output]
 colors = true
@@ -74,3 +77,7 @@ colors = true
 [scurl.security]
 allow_private_ips = false
 allow_localhost = false
+
+[scfs]
+[scfs.scanner]
+max_file_size_bytes = 50000000

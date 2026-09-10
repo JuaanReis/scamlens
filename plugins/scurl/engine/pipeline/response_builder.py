@@ -42,7 +42,7 @@ def _build_identity(ctx: ScanContext) -> dict:
         "is_homograph": False,  
         "is_https": structure.get("scheme", "").lower() == "https",
         "domain_length": structure.get("domain_length", 0),
-        "domain_entropy": shannon_entropy(registered_domain),
+        "domain_entropy": round(shannon_entropy(registered_domain), 5),
         "url_length": structure.get("url_length", 0),
         "has_ip": bool(structure.get("has_ip")),
         "has_port": bool(structure.get("has_port")),

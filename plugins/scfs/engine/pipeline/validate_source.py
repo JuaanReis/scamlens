@@ -2,10 +2,9 @@ from stat import S_ISBLK, S_ISFIFO, S_ISCHR, S_ISSOCK, S_ISDIR
 from pathlib import Path
 from typing import Optional
 from ...models.scan_context import ScanContext
-from time import time
-from ....scfs import __version__ 
+from plugins.scfs import __version__, config
 
-MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 # TODO: valor provisório, definir com base em dados reais
+MAX_FILE_SIZE_BYTES = config.get("scanner", {}).get("max_file_size_bytes", 50000000)
 
 def validate_input(ctx: ScanContext) -> Optional[dict]:
     data = ctx.source

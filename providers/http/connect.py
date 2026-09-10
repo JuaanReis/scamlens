@@ -28,7 +28,7 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
             )
 
             logger.info(
-                "%s %s · status=%d · tentativa=%d/%d",
+                "%s %s status=%d attempt=%d/%d",
                 method,
                 sanitize_url(url),
                 response.status_code,
@@ -43,7 +43,7 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
 
             if should_retry(response.status_code):
                 logger.warning(
-                    "%s %s · status=%d · tentativa=%d/%d · retry",
+                    "%s %s status=%d attempt=%d/%d retry",
                     method,
                     sanitize_url(url),
                     response.status_code,
@@ -60,7 +60,7 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
                 continue
 
             logger.warning(
-                "%s %s · status=%d · sem retry",
+                "%s %s status=%d no retry",
                 method,
                 sanitize_url(url),
                 response.status_code,
@@ -70,7 +70,7 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
 
         except (ConnectError, RequestError) as e:
             logger.warning(
-                "%s %s · tentativa=%d/%d · erro=%s",
+                "%s %s attempt=%d/%d error=%s",
                 method,
                 sanitize_url(url),
                 attempt + 1,
@@ -85,7 +85,7 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
                 )
 
     logger.error(
-        "%s %s · todas as %d tentativas falharam",
+        "%s %s all %d attempts failed",
         method,
         sanitize_url(url),
         retries,

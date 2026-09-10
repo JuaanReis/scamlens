@@ -44,3 +44,29 @@
 - Desativação do seguimento automático de redirecionamentos no cliente HTTP, mantendo o controle de redirecionamentos no scanner
 - Restrição da leitura de arquivos do painel administrativo a arquivos `.log` existentes dentro do diretório de logs
 - Ajuste do limite de concorrência do scanner de URLs de 5 para 3 threads
+
+## [1.9.5]
+
+### Adicionado
+
+- Logging estruturado para consultas DNS, incluindo quantidades de registros A, AAAA, MX, NS, CNAME e TXT, além dos indicadores SPF, DMARC e DKIM
+- Logging estruturado para consultas RDAP, cobrindo cache hit, cache miss, status HTTP, timeouts e falhas de conexão
+- Logging estruturado para consultas SSL/TLS, incluindo versão TLS, cipher, emissor, SANs, validade, certificado autoassinado e status de OCSP
+- Configuração do tamanho máximo de arquivos do `scfs` em `scamLens/config.toml`, com valor padrão de 50.000.000 bytes
+- Configuração de nível e ativação dos logs por meio da seção `[logs]`
+
+### Alterado
+
+- Versão do pacote atualizada para `1.9.5`
+- Constantes de caminhos estáticos e de logs tornadas públicas como `STATIC` e `LOG_DIR`
+- Configuração de origens permitidas do CORS lida diretamente de `cors.allow_origins`
+- Entropia do domínio arredondada para cinco casas decimais na resposta da análise de URL
+- Consultas RDAP com HTTP/2 desativado e limites de concorrência por servidor ajustados de 8 para 16 e de 4 para 8 no fallback
+- Consultas RDAP passaram a identificar o servidor e verificar o cache antes de adquirir o semáforo de concorrência
+- Falhas de timeout e de pool no RDAP deixaram de ser armazenadas no cache, e a limpeza do cache passou a registrar a quantidade de entradas removidas
+- Mensagens de logging do cliente HTTP padronizadas para o formato em inglês
+- Documentação da arquitetura atualizada para refletir os novos nomes das constantes de caminho
+
+### Removido
+
+- Scripts de benchmark de conexão HTTP e RDAP (`scripts/benchmark/connection_benchmark.py` e `scripts/benchmark/rdap_connection_benchmark.py`)

@@ -1,6 +1,7 @@
 import ssl
 import socket
 import hashlib
+import logging
 from datetime import datetime, timezone
 from providers.ssl.parse_issue_ssl import parse_issuer
 from cryptography import x509
@@ -8,6 +9,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID
 import urllib.request
+
+logger = logging.getLogger("scanner.ssl")
 
 def _check_ocsp_stapling(ssock: ssl.SSLSocket) -> bool | None:
     try:
@@ -38,27 +41,34 @@ def _sig_algorithm(cert_obj: x509.Certificate) -> str | None:
 
 def _ocsp_url(cert_obj: x509.Certificate) -> str | None:
     try:
-        aia = cert_obj.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+        aia = cert_obj.extensions.get_extension_for_oid(
+            ExtensionOID.AUTHORITY_INFORMATION_ACCESS
+        )
         for access in aia.value:
-            if access.access_method.dotted_string == "1.3.6.1.5.5.7.48.1":  
+            if access.access_method.dotted_string == "1.3.6.1.5.5.7.48.1":
                 return access.access_location.value
     except Exception:
         return None
 
 def _verify_ocsp(cert_obj: x509.Certificate, issuer_cert_bin: bytes | None = None) -> bool | None:
     ocsp_url = _ocsp_url(cert_obj)
+
     if not ocsp_url:
         return None
+
     try:
         req = urllib.request.Request(ocsp_url, method="HEAD")
         req.add_header("User-Agent", "scurl/1.0")
+
         with urllib.request.urlopen(req, timeout=3) as resp:
             return resp.status < 400
+
     except Exception:
         return None
 
 def get_ssl_cert(structure: dict) -> dict:
     host = structure.get("hostname", "")
+
     if not host:
         return {}
 
@@ -76,31 +86,54 @@ def get_ssl_cert(structure: dict) -> dict:
                 ocsp_stapled = _check_ocsp_stapling(ssock)
 
     except ConnectionRefusedError:
+        logger.warning("%s error=connection_refused", host)
         return {"connection_error": True}
+
     except socket.timeout:
+        logger.warning("%s error=timeout", host)
         return {"timeout": True}
+
     except ssl.SSLCertVerificationError:
+        logger.warning("%s error=invalid_cert", host)
         return {"invalid_cert": True}
+
     except socket.gaierror:
+        logger.warning("%s error=dns", host)
         return {"dns_error": True}
+
     except Exception:
+        logger.warning("%s error=unknown", host)
         return {"unknown": True}
 
     cert_obj = x509.load_der_x509_certificate(cert_bin)
+
     issuer = parse_issuer(cert.get("issuer", []))
     subject = parse_issuer(cert.get("subject", []))
-    san = [v for k, v in cert.get("subjectAltName", []) if k == "DNS"]
+
+    san = [
+        v for k, v in cert.get("subjectAltName", [])
+        if k == "DNS"
+    ]
+
     self_signed = cert.get("issuer") == cert.get("subject")
 
     not_before = cert.get("notBefore", "")
     not_after = cert.get("notAfter", "")
 
     try:
-        dt_from = datetime.strptime(not_before, "%b %d %H:%M:%S %Y %Z")
-        dt_until = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+        dt_from = datetime.strptime(
+            not_before,
+            "%b %d %H:%M:%S %Y %Z"
+        )
+        dt_until = datetime.strptime(
+            not_after,
+            "%b %d %H:%M:%S %Y %Z"
+        )
+
         validity_days = (dt_until - dt_from).days
         valid_from = dt_from.strftime("%Y-%m-%d")
         valid_until = dt_until.strftime("%Y-%m-%d")
+
     except Exception:
         validity_days = None
         valid_from = not_before
@@ -110,6 +143,19 @@ def get_ssl_cert(structure: dict) -> dict:
     sha256 = hashlib.sha256(cert_bin).hexdigest().upper()
 
     ocsp_reachable = _verify_ocsp(cert_obj)
+
+    logger.info(
+        "%s tls=%s cipher=%s issuer=%s san=%d valid_days=%s self_signed=%s ocsp_stapling=%s ocsp=%s",
+        host,
+        tls_version,
+        cipher_name,
+        issuer.get("O") or issuer.get("CN", ""),
+        len(san),
+        validity_days,
+        self_signed,
+        ocsp_stapled,
+        ocsp_reachable,
+    )
 
     return {
         "enabled": True,

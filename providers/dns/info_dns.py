@@ -1,4 +1,9 @@
+import logging
 import dns.resolver
+
+
+logger = logging.getLogger("scanner.dns")
+
 
 def _resolve(hostname: str, record_type: str) -> tuple[list, int | None]:
     try:
@@ -6,19 +11,24 @@ def _resolve(hostname: str, record_type: str) -> tuple[list, int | None]:
         records = [r.to_text() for r in answers]
         ttl = answers.rrset.ttl
         return records, ttl
+
     except Exception:
         return [], None
 
+
 def _extract_spf(txt_records: list[str]) -> bool:
     return any(r.strip('"').startswith("v=spf1") for r in txt_records)
+
 
 def _extract_dmarc(hostname: str) -> bool:
     records, _ = _resolve(f"_dmarc.{hostname}", "TXT")
     return any("v=DMARC1" in r for r in records)
 
+
 def _extract_dkim(hostname: str, selector: str = "default") -> bool:
     records, _ = _resolve(f"{selector}._domainkey.{hostname}", "TXT")
     return any("v=DKIM1" in r for r in records)
+
 
 def get_dns_info(hostname: str) -> dict:
     hostname = hostname.removeprefix("www.").strip().lower()
@@ -30,17 +40,40 @@ def get_dns_info(hostname: str) -> dict:
     txt_records, _ = _resolve(hostname, "TXT")
 
     mx_raw, _ = _resolve(hostname, "MX")
+
     mx_records = []
+
     for entry in mx_raw:
         parts = entry.split()
+
         if len(parts) == 2:
-            mx_records.append({"priority": int(parts[0]), "host": parts[1].rstrip(".")})
+            mx_records.append({
+                "priority": int(parts[0]),
+                "host": parts[1].rstrip("."),
+            })
         else:
-            mx_records.append({"priority": None, "host": entry})
+            mx_records.append({
+                "priority": None,
+                "host": entry,
+            })
 
     spf = _extract_spf(txt_records)
     dmarc = _extract_dmarc(hostname)
     dkim = _extract_dkim(hostname)
+
+    logger.info(
+        "%s a=%d aaaa=%d mx=%d ns=%d cname=%d txt=%d spf=%s dmarc=%s dkim=%s",
+        hostname,
+        len(a_records),
+        len(aaaa_records),
+        len(mx_records),
+        len(ns_records),
+        len(cname_records),
+        len(txt_records),
+        spf,
+        dmarc,
+        dkim,
+    )
 
     return {
         "a": a_records,

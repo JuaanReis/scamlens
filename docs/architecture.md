@@ -22,7 +22,7 @@ scamlens/
 │   │   ├── auth.py          # get_current_user / get_current_admin
 │   │   └── logging.py       # RequestLoggingMiddleware
 │   ├── limiter.py            # instância slowapi
-│   ├── path.py                # _STATIC, _STORAGE, _LOG_DIR
+│   ├── path.py                # STATIC, _STORAGE, LOG_DIR
 │   └── server.py              # monta a app, lifespan, inclui routers
 ├── plugins/
 │   ├── math/                 # utilitários compartilhados (levenshtein, entropy, etc.)
