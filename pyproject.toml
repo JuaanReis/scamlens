@@ -40,11 +40,11 @@ include = [
     "plugins*",
     "api*",
     "providers*",
-    "scamLens*",
-    "docs*",
+    "scamLens*"
 ]
 
 [tool.setuptools.package-data]
-"scamLens" = ["config.toml"]
-"providers.database" = ["schema/*.sql", "storage/*.db"]
+"scamLens" = ["config.toml", "logo_log.txt"]
+"plugins.scurl" = ["datasets/wordlists/*.txt"]
+"providers.database" = ["schema/*.sql"]
 api = ["static/*"]

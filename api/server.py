@@ -1,5 +1,6 @@
 from api.logs import LOGS_ENABLED, initialize_logging
 from scamLens import __version__, config
+from .path import STATIC, _STORAGE
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -23,7 +24,6 @@ from api.middleware.logging.logging import RequestLoggingMiddleware
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from scamLens import get_settings
-from .path import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
@@ -103,6 +103,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 def run():
     server = config.get("server", {})
+    logs = config.get("logs", {}).get("enabled", False)
     workers = 1 if platform == "win32" else server.get("workers", 1)
     
     uvicorn.run(
@@ -111,7 +112,7 @@ def run():
         port=server.get("port", 8000),
         workers=workers,
         reload=server.get("reload", False),
-        access_log=not server.get("logs", False)
+        access_log=not logs
     )
 
 if __name__ == "__main__":
