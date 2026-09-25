@@ -1,12 +1,9 @@
 from logging import getLogger
 from time import perf_counter
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-
 from .client import get_client_ip, get_referer, get_user_agent
 from .database import log_request
-
 
 logger = getLogger("api.request")
 
@@ -14,7 +11,6 @@ LOGGED_PREFIXES = (
     "/api/scurl",
     "/api/qr",
 )
-
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
 

@@ -11,7 +11,7 @@ from plugins.scurl.engine.pipeline.validate_url import resolve_and_validate_host
 from urllib.parse import urlparse
 from plugins.scurl import config
 
-MAX_REDIRECTS = config.get("scanner", {}).get("max_redirects", 10)
+MAX_REDIRECTS = config["scanner"]["max_redirects"]
 
 def _is_safe_redirect(location: str) -> bool:
     parsed = urlparse(location)

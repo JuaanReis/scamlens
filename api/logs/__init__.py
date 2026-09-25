@@ -5,15 +5,15 @@ from time import perf_counter
 import logging
 from scamLens import __version__, config
 from ..path import LOG_DIR
-from scamLens import get_settings
+from scamLens import get_settings, logo, config
 from platform import python_version, system, node
 
 setting = get_settings()
-
 START = perf_counter()
-
-LOGS_ENABLED = config.get("logs", {}).get("enabled", False)
-LEVEL = config.get("logs", {}).get("level", "INFO").upper()
+logs_config = config["logs"]
+host_name = logs_config["host_name"]
+LOGS_ENABLED = logs_config["enabled"]
+LEVEL = logs_config["level"].upper()
 numeric_level = getattr(logging, LEVEL, logging.INFO)
 
 _initialized = False
@@ -36,21 +36,14 @@ def setup_logging(log_file: Path):
     if _initialized:
         return
 
-    with open(
-        "./scamLens/logo_log.txt",
-        "r",
-        encoding="utf-8",
-    ) as f:
-        logo = f.read()
-
     with log_file.open("w", encoding="utf-8") as file:
         file.write(
             f"{logo}\n\n"
             f":: Started {datetime.now():%Y-%m-%d %H:%M:%S}\n"
-            f":: Version ({__version__})\n"
+            f":: Project version ({__version__})\n"
             f":: Python Version ({python_version()})\n"
-            f":: Platform ({system()})\n"
-            f":: Host ({node() if node() else "-"})\n"
+            f":: Host ({node() if node() and host_name else "-"})\n"
+            f":: Host platform ({system() if system() else "-"})\n"
             f":: Mode ({setting.environment if setting.environment == "production" else "development"})\n\n"
         )
 

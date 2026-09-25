@@ -2,7 +2,7 @@ from re import search, I
 from starlette.requests import Request
 from scamLens import config
 
-_TRUST_PROXY = config.get("logging", {}).get("trust_proxy", False)
+_TRUST_PROXY = config["logging"]["trust_proxy"]
 
 def get_client_ip(request: Request) -> str:
     if _TRUST_PROXY:

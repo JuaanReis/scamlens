@@ -13,12 +13,12 @@ from scamLens import get_settings
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
-cookie_config = config.get("cookies", {})
-secure = cookie_config.get("secure", True)
-samesite = cookie_config.get("samesite", "lax")
-httponly = cookie_config.get("httponly", True)
-ttl_minutes = cookie_config.get("ttl_minutes", 30)
-ttl_days = cookie_config.get("ttl_days", 30)
+cookie_config = config["cookies"]
+secure = cookie_config["secure"]
+samesite = cookie_config["samesite"]
+httponly = cookie_config["httponly"]
+ttl_minutes = cookie_config["ttl_minutes"]
+ttl_days = cookie_config["ttl_days"]
 
 COOKIE_KWARGS = {"httponly": httponly, "secure": secure, "samesite": samesite}
 

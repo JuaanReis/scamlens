@@ -3,7 +3,7 @@ from pathlib import Path
 import threading
 from scamLens import config
 
-DB_PATH = Path(config.get("paths", {}).get("scamlens_db_path", "./providers/storage/db/scamlens.db"))
+DB_PATH = Path(config["paths"]["scamlens_db_path"])
 BASE_DIR = Path(__file__).parent.parent.parent
 SCHEMA_FILE = BASE_DIR / "providers" / "database" / "schema" / "scans.sql"
 SCHEMA_DIR = BASE_DIR / "providers" / "database" / "schema"

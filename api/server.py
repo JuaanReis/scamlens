@@ -1,8 +1,7 @@
-from api.logs import LOGS_ENABLED, initialize_logging
-from scamLens import __version__, config
-from .path import STATIC, _STORAGE
 import logging
 from contextlib import asynccontextmanager
+from sys import platform
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,20 +9,20 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sys import platform
-import uvicorn
+from scamLens import __version__, config, get_settings
 from api.limiter import limiter
+from api.logs import LOGS_ENABLED, initialize_logging
+from api.middleware.logging.logging import RequestLoggingMiddleware
 from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
+from api.router.system import router as system_router
+from api.router.users import router as users_router
 from api.router.scurl.url import router as scurl_analyze_router
 from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
-from api.router.system import router as system_router
-from api.router.users import router as users_router
-from api.middleware.logging.logging import RequestLoggingMiddleware
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
-from scamLens import get_settings
+from .path import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
@@ -69,16 +68,16 @@ app.add_middleware(SlowAPIMiddleware)
 if LOGS_ENABLED:
     app.add_middleware(RequestLoggingMiddleware)
 
-cors_config = config.get("cors", {})
-if cors_config.get("enabled", True):
+cors_config = config["cors"]
+if cors_config["enabled"]:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_config["allow_origins"],
-        allow_credentials=cors_config.get("allow_credentials", False),
-        allow_methods=cors_config.get("allow_methods", ["*"]),
-        allow_headers=cors_config.get("allow_headers", ["*"]),
-        expose_headers=cors_config.get("expose_headers", []),
-        max_age=cors_config.get("max_age", 600),
+        allow_credentials=cors_config["allow_credentials"],
+        allow_methods=cors_config["allow_methods"],
+        allow_headers=cors_config["allow_headers"],
+        expose_headers=cors_config["expose_headers"],
+        max_age=cors_config["max_age"],
     )
 
 app.include_router(auth_router)
@@ -102,16 +101,16 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 def run():
-    server = config.get("server", {})
-    logs = config.get("logs", {}).get("enabled", False)
-    workers = 1 if platform == "win32" else server.get("workers", 1)
+    server = config["server"]
+    logs = config["logs"]["enabled"]
+    workers = 1 if platform == "win32" else server["workers"]
     
     uvicorn.run(
         "api.server:app",
-        host=server.get("host", "0.0.0.0"),
-        port=server.get("port", 8000),
+        host=server["host"],
+        port=server["port"],
         workers=workers,
-        reload=server.get("reload", False),
+        reload=server["reload"],
         access_log=not logs
     )
 

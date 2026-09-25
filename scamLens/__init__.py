@@ -29,6 +29,12 @@ except FileNotFoundError:
 except tomllib.TOMLDecodeError:
     raise RuntimeError(f"Error parsing the config.toml file {_CONFIG_PATH}")
 
+try:
+    with open("./scamLens/logo_log.txt", "r", encoding="utf-8") as f:
+        logo = f.read()
+except FileNotFoundError:
+    logo = ""
+
 @dataclass(frozen=True)
 class Settings:
     email_admin: str

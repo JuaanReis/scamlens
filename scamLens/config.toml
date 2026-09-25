@@ -7,6 +7,7 @@ reload = false
 [logs]
 enabled = true
 level = "INFO"
+host_name = true
 
 [cors]
 enabled = true
@@ -70,6 +71,8 @@ timeout = 6.0
 threads = 3
 cache = true
 k = 5 
+max_redirects = 10
+retries = 3
 
 [scurl.output]
 colors = true

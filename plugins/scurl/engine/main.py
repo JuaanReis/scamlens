@@ -21,7 +21,7 @@ def run_engine(source: str | Path | bytes, k: int = 5, timeout: float = 5, proce
 
     ctx = ScanContext(target=TargetData(url=url))
 
-    if use_cache and config.get("scanner", {}).get("cache", False):
+    if use_cache and config["scanner"]["cache"]:
         if cached := load_cache(ctx.meta.url_hash):
             return cached
 

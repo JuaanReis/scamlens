@@ -7,9 +7,9 @@ from scamLens import config
 
 logger = logging.getLogger("scanner.rdap")
 
-_rdap_config = config.get("rdap", {})
-_MAX_CONCURRENT_PER_SERVER = _rdap_config.get("max_concurrent_per_server", 8)
-_FALLBACK_MAX_CONCURRENT = _rdap_config.get("fallback_max_concurrent", 4)
+_rdap_config = config["rdap"]
+_MAX_CONCURRENT_PER_SERVER = _rdap_config["max_concurrent_per_server"]
+_FALLBACK_MAX_CONCURRENT = _rdap_config["fallback_max_concurrent"]
 
 _RDAP_SERVERS: dict[str, str] = {
     "com":  "https://rdap.verisign.com/com/v1/domain/",

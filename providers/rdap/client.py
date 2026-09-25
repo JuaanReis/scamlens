@@ -1,20 +1,20 @@
 from httpx import Client, Limits, Timeout
 from scamLens import __version__, config
 
-rdap_config = config.get("rdap", {})
+rdap_config = config["rdap"]
 
 def _base_limits() -> Limits:
     return Limits(
-        max_keepalive_connections=rdap_config.get("max_keepalive_connections", 20),
-        max_connections=rdap_config.get("max_connections", 120)
+        max_keepalive_connections=rdap_config["max_keepalive_connections"],
+        max_connections=rdap_config["max_connections"]
     )
 
 def make_rdap_client() -> Client:
     return Client(
-        http2=rdap_config.get("http2", False),
-        verify=rdap_config.get("verify", True),
-        follow_redirects=rdap_config.get("follow_redirects", True),
-        timeout=Timeout(connect=rdap_config.get("connect", 2.0), read=rdap_config.get("read", 3.0), write=rdap_config.get("write", 2.0), pool=rdap_config.get("pool", 1.0)),
+        http2=rdap_config["http2"],
+        verify=rdap_config["verify"],
+        follow_redirects=rdap_config["follow_redirects"],
+        timeout=Timeout(connect=rdap_config["connect"], read=rdap_config["read"], write=rdap_config["write"], pool=rdap_config["pool"]),
         limits=_base_limits(),
         headers={
             "User-Agent": f"ScamLens/{__version__}",

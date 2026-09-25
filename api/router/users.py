@@ -9,7 +9,7 @@ from scamLens import config
 
 router = APIRouter(prefix="/api/user", tags=["users"])
 
-AVATARS_DIR = Path(config.get("paths", {}).get("avatar", ""))
+AVATARS_DIR = Path(config["paths"]["avatar"])
 MAX_SIZE_BYTES = 2 * 1024 * 1024 
 
 ALLOWED_SIGNATURES: list[tuple[bytes, str, str]] = [

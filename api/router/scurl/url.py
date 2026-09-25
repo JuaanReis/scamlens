@@ -18,8 +18,8 @@ from api.router.scurl.schema.map_result import (
     TargetResponse
 )
 
-_rate_enabled = config.get("rate_limit", {}).get("enabled", False)
-_rpm = config.get("rate_limit", {}).get("requests_per_minute", 10)
+_rate_enabled = config["rate_limit"]["enabled"]
+_rpm = config["rate_limit"]["requests_per_minute"]
 _limit_string = f"{_rpm}/minute" if _rate_enabled else "99999/minute"
 router = APIRouter()
 
@@ -80,17 +80,17 @@ async def analyze_url(request: Request, body: AnalyzeRequest):
     if _semaphore.locked():
         return JSONResponse(status_code=503, content={"error": "servidor ocupado, tente novamente"})
 
-    scanner_config = config_scurl.get("scanner", {})
+    scanner_config = config_scurl["scanner"]
     async with _semaphore:
         loop = asyncio.get_running_loop()
         scan, target = await loop.run_in_executor(
             None, partial(
                 run_engine, str(body.url),
                 use_cache=body.use_cache,
-                timeout=scanner_config.get("timeout", 5.0),
-                processors=scanner_config.get("threads", 2),
-                k=scanner_config.get("k", 5),
-                retries=scanner_config.get("retries", 3)
+                timeout=scanner_config["timeout"],
+                processors=scanner_config["threads"],
+                k=scanner_config["k"],
+                retries=scanner_config["retries"]
             )
         )
 
