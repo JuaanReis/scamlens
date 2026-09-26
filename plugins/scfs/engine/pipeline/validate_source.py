@@ -4,7 +4,7 @@ from typing import Optional
 from ...models.scan_context import ScanContext
 from plugins.scfs import __version__, config
 
-MAX_FILE_SIZE_BYTES = config.get("scanner", {}).get("max_file_size_bytes", 50000000)
+MAX_FILE_SIZE_BYTES = config["scanner"]["max_file_size_bytes"]
 
 def validate_input(ctx: ScanContext) -> Optional[dict]:
     data = ctx.source

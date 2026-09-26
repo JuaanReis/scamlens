@@ -69,7 +69,7 @@ GOOGLE_SAFE_BROWSING_KEY=sua_chave
 SCAMLENS_ENV=development
 
 # Opcional — default inferido a partir do repo
-SCAMLENS_DB_PATH=./providers/database/storage/db/scamlens.db
+SCAMLENS_DB_PATH=./providers/storage/db/scamlens.db
 ```
 
 Suba o servidor:
