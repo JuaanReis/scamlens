@@ -13,7 +13,7 @@ try:
     from importlib.metadata import version, PackageNotFoundError
     __version__ = version("scamlens")
 except PackageNotFoundError:
-    __version__ = "0.0.0-nferr"
+    __version__ = "0.0.0-npkg" # package is not installed
 
 try:
     _CONFIG_PATH = Path(__file__).parent / "config.toml"  

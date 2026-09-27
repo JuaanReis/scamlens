@@ -1,3 +1,5 @@
+from time import perf_counter
+START = perf_counter() # Start measuring time for server startup
 import logging
 from contextlib import asynccontextmanager
 from sys import platform
@@ -22,14 +24,14 @@ from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
-from .path import STATIC, _STORAGE
+from ..scamLens.paths import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     if LOGS_ENABLED:
-        initialize_logging()
+        initialize_logging(START)
 
     try:
         init_db()
@@ -42,6 +44,14 @@ async def lifespan(app: FastAPI):
 
     conn = get_connection()
     ensure_admin_exists(conn)
+
+    startup_time = perf_counter() - START # Measure the time taken for server startup
+
+    if LOGS_ENABLED:
+        logging.info(
+            "Server startup completed in %.3fs",
+            startup_time,
+        )
 
     yield
 
@@ -106,7 +116,7 @@ def run():
     workers = 1 if platform == "win32" else server["workers"]
     
     uvicorn.run(
-        "api.server:app",
+        app=app,
         host=server["host"],
         port=server["port"],
         workers=workers,

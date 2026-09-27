@@ -1,22 +1,21 @@
 [server]
 host = "0.0.0.0"
-port = 8000
+port = 5300
 workers = 1
 reload = false
 
 [logs]
 enabled = true
 level = "INFO"
-host_name = true
 
 [cors]
 enabled = true
 allow_credentials = true
 max_age = 600
-expose_headers = []
+expose_headers = ["*"]
 allow_methods = ["*"]
 allow_headers = ["*"]
-allow_origins = []
+allow_origins = ["*"]
 
 [rate_limit]
 enabled = true

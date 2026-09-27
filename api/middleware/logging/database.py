@@ -8,7 +8,7 @@ def log_request(
     user_id,
     scan_id,
     status_code: int,
-    duration_ms: float,
+    duration_ms: float
 ):
     conn = get_connection()
 

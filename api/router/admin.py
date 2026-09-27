@@ -6,7 +6,7 @@ from providers.database.connection import get_connection
 from providers.database.users import list_users, set_user_active, update_user_plan, get_global_metrics
 from providers.database.repository import list_scans
 from fastapi.responses import PlainTextResponse
-from ..path import LOG_DIR
+from scamLens.paths import LOG_DIR
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

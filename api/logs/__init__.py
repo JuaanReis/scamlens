@@ -1,20 +1,18 @@
 from datetime import datetime
 from os import getpid
 from pathlib import Path
-from time import perf_counter
 import logging
-from scamLens import __version__, config
-from ..path import LOG_DIR
-from scamLens import get_settings, logo, config
+from scamLens.paths import LOG_DIR
+from scamLens import get_settings, logo, config, __version__
 from platform import python_version, system, node
+from .warning_aux import is_production as _is_production, warning_aux_log
 
 setting = get_settings()
-START = perf_counter()
 logs_config = config["logs"]
-host_name = logs_config["host_name"]
 LOGS_ENABLED = logs_config["enabled"]
 LEVEL = logs_config["level"].upper()
 numeric_level = getattr(logging, LEVEL, logging.INFO)
+HOST = node()
 
 _initialized = False
 
@@ -30,21 +28,27 @@ class UTCFormatter(logging.Formatter):
             + dt.strftime(" %z")
         )
 
-def setup_logging(log_file: Path):
+def setup_logging(log_file: Path, bootstrap_time: float = None) -> None:
     global _initialized
 
     if _initialized:
         return
+    
+    LABEL_WIDTH = 10
 
-    with log_file.open("w", encoding="utf-8") as file:
-        file.write(
-            f"{logo}\n\n"
-            f":: Started {datetime.now():%Y-%m-%d %H:%M:%S}\n"
-            f":: Project version ({__version__})\n"
-            f":: Python Version ({python_version()})\n"
-            f":: Host ({node() if node() and host_name else "-"})\n"
-            f":: Host platform ({system() if system() else "-"})\n"
-            f":: Mode ({setting.environment if setting.environment == "production" else "development"})\n\n"
+    with log_file.open("w", encoding="utf-8") as f:
+        f.write(
+            f"{logo + "   " + __version__}\n\n"
+            f":: {"Started":<{LABEL_WIDTH}} {datetime.now():%Y-%m-%d %H:%M:%S}\n"
+            f":: {"Python":<{LABEL_WIDTH}} {python_version()}\n"
+            f":: {"Host":<{LABEL_WIDTH}} {HOST if HOST and not _is_production() else 'xxxx'}\n"
+            f":: {"Platform":<{LABEL_WIDTH}} {system() if not _is_production() else 'xxxx'}\n"
+            f":: {"Mode":<{LABEL_WIDTH}} {setting.environment.upper() if setting.environment == 'production' else 'development'.upper()}\n"
+            f":: {"Logging":<{LABEL_WIDTH}} {LEVEL if not _is_production() else 'xxxx'}\n"
+            f":: {"Reload":<{LABEL_WIDTH}} {config['server']['reload'] if not _is_production() else 'xxxx'}\n"
+            f":: {"Bootstrap":<{LABEL_WIDTH}} {(bootstrap_time/1000):.2f}s\n"
+            f"{warning_aux_log()}"
+            f"\n"
         )
 
     handler = logging.FileHandler(
@@ -77,7 +81,7 @@ def setup_logging(log_file: Path):
 
     _initialized = True
 
-def initialize_logging():
+def initialize_logging(time: float = None) -> Path | None:
     if not LOGS_ENABLED:
         return None
 
@@ -88,6 +92,6 @@ def initialize_logging():
         f"_pid{getpid()}.log"
     )
 
-    setup_logging(log_file)
+    setup_logging(log_file, time)
 
     return log_file
