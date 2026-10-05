@@ -79,7 +79,7 @@ Veja [CLI Reference](cli.md) para todos os argumentos e flags.
 scurl-api
 ```
 
-Isso inicia o servidor uvicorn com as configurações definidas em `config["server"]`. Por padrão, o servidor sobe em `http://localhost:8000`.
+Isso inicia o servidor uvicorn com as configurações definidas em `config["server"]`. Por padrão, o servidor sobe em `http://localhost:5300`.
 
 Para subir o servidor manualmente com controle de reload (desenvolvimento):
 

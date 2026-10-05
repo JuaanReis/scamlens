@@ -6,9 +6,7 @@ from .certificate_scoring import (
     f_issuer, f_mismatch, f_self_signed,
     f_expiry, f_org, f_sig_algorithm,
 )
-from providers.ssl.info_ssl import get_ssl_cert
 from ...registry import register
-
 
 @register(name="ssl_score", category="server", severity="high", weight=3.5, tags=["server", "ssl", "certificate"])
 def ssl_score(structure: dict) -> ResultBase:
@@ -33,7 +31,7 @@ def ssl_score(structure: dict) -> ResultBase:
     Score final via sigmoid ponderada (k=5), normalizado em [0, 1].
     Valores mais altos indicam maior risco.
     """
-    ssl_data = get_ssl_cert(structure)
+    ssl_data = structure.get("ssl", {})
 
     if ssl_data.get("connection_refused", False):
         return ResultBase(

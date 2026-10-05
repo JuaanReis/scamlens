@@ -1,3 +1,4 @@
+from scamLens import __version__, config, get_settings
 from time import perf_counter
 START = perf_counter() # Start measuring time for server startup
 import logging
@@ -11,8 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from scamLens import __version__, config, get_settings
-from api.limiter import limiter
+from api.middleware.limiter import limiter
 from api.logs import LOGS_ENABLED, initialize_logging
 from api.middleware.logging.logging import RequestLoggingMiddleware
 from api.router.admin import router as admin_router
@@ -24,14 +24,14 @@ from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
-from ..scamLens.paths import STATIC, _STORAGE
+from scamLens.paths import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
     if LOGS_ENABLED:
-        initialize_logging(START)
+        initialize_logging(START) # Initialize logging with the server startup time
 
     try:
         init_db()
@@ -116,7 +116,7 @@ def run():
     workers = 1 if platform == "win32" else server["workers"]
     
     uvicorn.run(
-        app=app,
+        app="api.server:app",
         host=server["host"],
         port=server["port"],
         workers=workers,

@@ -3,14 +3,12 @@ from functools import partial
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from time import perf_counter
-from api.limiter import limiter
 from api.router.scurl.schema.map_error import ErrorResponse  
 from plugins.scurl import run_engine
-from providers.database.repository import save_scan
 from scamLens import config
+from providers.database.repository import save_scan
 from providers.database.usage import is_usage_exceeded, increment_usage, PLAN_LIMITS
 from providers.database.quota import is_quota_exceeded, increment_anonymous_count
-from plugins.scurl import config as config_scurl
 from api.router.scurl.schema.map_result import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -18,12 +16,9 @@ from api.router.scurl.schema.map_result import (
     TargetResponse
 )
 
-_rate_enabled = config["rate_limit"]["enabled"]
-_rpm = config["rate_limit"]["requests_per_minute"]
-_limit_string = f"{_rpm}/minute" if _rate_enabled else "99999/minute"
 router = APIRouter()
 
-MAX_CONCURRENT_SCANS = 20
+MAX_CONCURRENT_SCANS = config["rate_limit"]["max_concurrent_scans"]
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 @router.post(
@@ -36,7 +31,6 @@ _semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
         503: {"description": "Servidor ocupado"},
     }
 )
-@limiter.limit(_limit_string)
 async def analyze_url(request: Request, body: AnalyzeRequest):
     start = perf_counter()
     user_id = None
@@ -80,7 +74,7 @@ async def analyze_url(request: Request, body: AnalyzeRequest):
     if _semaphore.locked():
         return JSONResponse(status_code=503, content={"error": "servidor ocupado, tente novamente"})
 
-    scanner_config = config_scurl["scanner"]
+    scanner_config = config["scurl"]["scanner"]
     async with _semaphore:
         loop = asyncio.get_running_loop()
         scan, target = await loop.run_in_executor(

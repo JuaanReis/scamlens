@@ -35,12 +35,12 @@ pip install -e .
 scamlens-api
 ```
 
-Isso chama `run()` em `api/server.py`, que lê `[server]` de `scamLens/config.toml` (`host`, `port`, `workers`, `reload`). Com o `config.toml` do repo, sobe em `0.0.0.0:8000` com reload ativado. Em Windows, `workers` é forçado para `1` independente do config (checagem de `sys.platform == "win32"`).
+Isso chama `run()` em `api/server.py`, que lê `[server]` de `scamLens/config.toml` (`host`, `port`, `workers`, `reload`). Com o `config.toml` do repo, sobe em `0.0.0.0:5300` com reload ativado. Em Windows, `workers` é forçado para `1` independente do config (checagem de `sys.platform == "win32"`).
 
 Alternativa sem instalar o pacote:
 
 ```bash
-uvicorn api.server:app --reload --port 8000
+uvicorn api.server:app --reload --port 5300
 ```
 
 ### Ambiente local vs produção — coisas que vão te morder
@@ -60,7 +60,7 @@ Com `SCAMLENS_ENV` diferente de `production` (ou seja, definida como qualquer ou
 ### Registrar
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/register \
+curl -X POST http://localhost:5300/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email": "user@exemplo.com", "name": "Fulano", "password": "senha123"}'
 ```
@@ -74,7 +74,7 @@ Se o e-mail já existir, `409`. **Não há verificação de e-mail** — a conta
 ### Login
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/login \
+curl -X POST http://localhost:5300/api/auth/login \
   -H "Content-Type: application/json" \
   -c cookies.txt \
   -d '{"email": "user@exemplo.com", "password": "senha123", "remember": true}'
@@ -89,21 +89,21 @@ Use `-b cookies.txt -c cookies.txt` no curl para reaproveitar os cookies nas pr�
 O middleware aceita `Authorization: Bearer <access_token>` como alternativa ao cookie — útil para chamar a API de scripts/Postman sem lidar com cookie jar:
 
 ```bash
-curl http://localhost:8000/api/user/me \
+curl http://localhost:5300/api/user/me \
   -H "Authorization: Bearer <access_token_copiado_do_cookie>"
 ```
 
 ### Renovar token
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/refresh -b cookies.txt -c cookies.txt
+curl -X POST http://localhost:5300/api/auth/refresh -b cookies.txt -c cookies.txt
 ```
 Emite um novo par de tokens a partir do refresh token do cookie. **Não há checagem contra uma tabela de refresh tokens ativos** — só a assinatura/expiração do JWT são validadas, mais o `jti` não estar na blocklist de revogados.
 
 ### Logout
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/logout -b cookies.txt
+curl -X POST http://localhost:5300/api/auth/logout -b cookies.txt
 ```
 Revoga o `jti` do access e do refresh token atuais (inserindo em `revoked_tokens`) e limpa os cookies.
 
@@ -112,7 +112,7 @@ Revoga o `jti` do access e do refresh token atuais (inserindo em `revoked_tokens
 ## 3. Análise de URL
 
 ```bash
-curl -X POST http://localhost:8000/api/scurl/analyze/url \
+curl -X POST http://localhost:5300/api/scurl/analyze/url \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d '{"url": "http://exemplo-suspeito.com/login", "use_cache": true}'
@@ -141,7 +141,7 @@ Respostas possíveis:
 ## 4. Análise de QR code
 
 ```bash
-curl -X POST http://localhost:8000/api/scurl/qr/analyze/qr \
+curl -X POST http://localhost:5300/api/scurl/qr/analyze/qr \
   -b cookies.txt \
   -F "file=@qrcode.png"
 ```
@@ -161,8 +161,8 @@ Erros específicos desse endpoint:
 ## 5. Consultar scans
 
 ```bash
-curl "http://localhost:8000/api/scurl/scans?limit=20&offset=0"
-curl "http://localhost:8000/api/scurl/scans/<scan_id_ou_url_hash>"
+curl "http://localhost:5300/api/scurl/scans?limit=20&offset=0"
+curl "http://localhost:5300/api/scurl/scans/<scan_id_ou_url_hash>"
 ```
 
 `GET /api/scurl/scans` **não filtra por usuário** — devolve o histórico de scans em geral (`limit` 1–200, default 50), não é "meu histórico". Para dados do usuário logado, veja `/api/user/me` abaixo, que expõe atividade agregada (contagem semanal, total, ameaças) via `activity`.
@@ -172,11 +172,11 @@ curl "http://localhost:8000/api/scurl/scans/<scan_id_ou_url_hash>"
 ## 6. Perfil de usuário
 
 ```bash
-curl http://localhost:8000/api/user/me -b cookies.txt
+curl http://localhost:5300/api/user/me -b cookies.txt
 ```
 
 ```bash
-curl -X POST http://localhost:8000/api/user/avatar \
+curl -X POST http://localhost:5300/api/user/avatar \
   -b cookies.txt \
   -F "file=@foto.jpg"
 ```
@@ -189,18 +189,18 @@ Limite de 2MB, formatos aceitos por magic bytes: JPEG, PNG, WebP, GIF. Avatar an
 Requer conta com `is_admin = true` — só existe hoje por seeding automático via `EMAIL_ADMIN`/`PASSWORD_ADMIN` no startup, não há endpoint para promover um usuário a admin.
 
 ```bash
-curl http://localhost:8000/api/admin/metrics -b admin_cookies.txt
-curl "http://localhost:8000/api/admin/users?limit=50&offset=0" -b admin_cookies.txt
-curl -X PATCH http://localhost:8000/api/admin/users/3/active \
+curl http://localhost:5300/api/admin/metrics -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/users?limit=50&offset=0" -b admin_cookies.txt
+curl -X PATCH http://localhost:5300/api/admin/users/3/active \
   -H "Content-Type: application/json" -b admin_cookies.txt \
   -d '{"is_active": false}'
-curl -X PATCH http://localhost:8000/api/admin/users/3/plan \
+curl -X PATCH http://localhost:5300/api/admin/users/3/plan \
   -H "Content-Type: application/json" -b admin_cookies.txt \
   -d '{"plan_name": "go_pro"}'
-curl "http://localhost:8000/api/admin/scans?limit=50" -b admin_cookies.txt
-curl "http://localhost:8000/api/admin/request-logs?limit=200" -b admin_cookies.txt
-curl http://localhost:8000/api/admin/logs -b admin_cookies.txt
-curl "http://localhost:8000/api/admin/logs/scamlens_2026-07-27_10-00-00_pid1234.log?tail=500" -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/scans?limit=50" -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/request-logs?limit=200" -b admin_cookies.txt
+curl http://localhost:5300/api/admin/logs -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/logs/scamlens_2026-07-27_10-00-00_pid1234.log?tail=500" -b admin_cookies.txt
 ```
 
 `plan_name` válido: `standard`, `go_pro`, `plus_premium` (qualquer outro valor → `400`). Toda ação admin (inclusive leituras de listas) grava uma linha em `admin_audit_log` — isso inclui simplesmente listar usuários ou scans, não só ações de escrita.
@@ -212,8 +212,8 @@ curl "http://localhost:8000/api/admin/logs/scamlens_2026-07-27_10-00-00_pid1234.
 ## 8. Health check
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/health/version -b admin_cookies.txt   # requer admin
+curl http://localhost:5300/health
+curl http://localhost:5300/health/version -b admin_cookies.txt   # requer admin
 ```
 
 `/health` não requer autenticação e testa conectividade com o banco (`db: "ok"` ou `"error"`). `/health/version` requer admin e devolve a versão do pacote instalado.

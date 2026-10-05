@@ -60,7 +60,7 @@ GOOGLE_SAFE_BROWSING_KEY=sua_chave_de_teste
 ```bash
 scamlens-api
 # ou, sem instalar o entry point:
-uvicorn api.server:app --reload --port 8000
+uvicorn api.server:app --reload --port 5300
 ```
 
 Isso cria automaticamente a conta admin (`ensure_admin_exists()`, a partir de `EMAIL_ADMIN`/`PASSWORD_ADMIN`) e inicializa o banco SQLite local no primeiro start. Para exercitar o CLI do motor de URL sem subir a API:

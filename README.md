@@ -40,7 +40,6 @@ O motor de QR (`scqr`) decodifica a imagem, classifica o tipo de payload e, quan
 
 - Python 3.10+
 - SQLite 3.x (incluso na stdlib)
-- Nginx (apenas para deploy em produção)
 
 ---
 
@@ -67,9 +66,6 @@ GOOGLE_SAFE_BROWSING_KEY=sua_chave
 
 # Opcional — default é "production" (desabilita /docs e /redoc)
 SCAMLENS_ENV=development
-
-# Opcional — default inferido a partir do repo
-SCAMLENS_DB_PATH=./providers/storage/db/scamlens.db
 ```
 
 Suba o servidor:
@@ -78,7 +74,7 @@ Suba o servidor:
 scamlens-api
 ```
 
-A API estará disponível em `http://localhost:8000`. Na primeira execução, a conta admin é criada automaticamente a partir de `EMAIL_ADMIN`/`PASSWORD_ADMIN`.
+A API estará disponível em `http://localhost:5300`. Na primeira execução, a conta admin é criada automaticamente a partir de `EMAIL_ADMIN`/`PASSWORD_ADMIN`.
 
 Com `SCAMLENS_ENV=development`, a documentação interativa fica disponível em `/docs` e `/redoc`.
 
@@ -89,7 +85,7 @@ Com `SCAMLENS_ENV=development`, a documentação interativa fica disponível em 
 ### Analisar uma URL
 
 ```bash
-curl -X POST http://localhost:8000/api/scurl/analyze/url \
+curl -X POST http://localhost:5300/api/scurl/analyze/url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://exemplo-suspeito.com", "use_cache": false}'
 ```
@@ -139,7 +135,7 @@ Sem autenticação, o endpoint aceita até **3 análises por dia** por IP. Requi
 ### Analisar um QR code
 
 ```bash
-curl -X POST http://localhost:8000/api/scurl/qr/analyze/qr \
+curl -X POST http://localhost:5300/api/scurl/qr/analyze/qr \
   -F "file=@qrcode.png"
 ```
 

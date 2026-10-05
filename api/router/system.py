@@ -21,7 +21,7 @@ async def health():
     db_status = "ok"
     try:
         from providers.database.connection import get_connection
-        get_connection().execute("SELECT 1")
+        get_connection().execute("SELECT 1").fetchone()
     except Exception:
         db_status = "error"
 

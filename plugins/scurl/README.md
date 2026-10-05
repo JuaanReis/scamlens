@@ -59,7 +59,7 @@ O ponto de entrada principal é `-u`, que recebe a URL alvo. As flags disponíve
 
 ## *API*
 
-Inicie o servidor com `scurl-api`. Por padrão sobe em `http://localhost:8000`.
+Inicie o servidor com `scurl-api`. Por padrão sobe em `http://localhost:5300`.
 
 ```bash
 scurl-api
@@ -68,7 +68,7 @@ scurl-api
 ### Exemplo de request
 
 ```bash
-curl -X POST http://localhost:8000/analyze \
+curl -X POST http://localhost:5300/analyze \
   -H "Content-Type: application/json" \
   -d '{"url":"http://www.exemp1o.com/results?user=i123"}'
 ```
