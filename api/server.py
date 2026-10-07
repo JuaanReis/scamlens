@@ -19,12 +19,13 @@ from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
+from api.router.chat import router as chat_router 
 from api.router.scurl.url import router as scurl_analyze_router
 from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
-from ..scamLens.paths import STATIC, _STORAGE
+from scamLens.paths import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
@@ -94,6 +95,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(system_router)
 app.include_router(admin_router)
+app.include_router(chat_router)
 app.include_router(scurl_analyze_router, prefix="/api/scurl")
 app.include_router(scurl_scans_router, prefix="/api/scurl")
 app.include_router(scurl_qr_router, prefix="/api/scurl/qr")

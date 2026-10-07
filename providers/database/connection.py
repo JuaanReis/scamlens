@@ -20,7 +20,7 @@ def get_connection() -> sqlite3.Connection:
     return _local.conn
 
 def init_db() -> None:
-    schemas = ["scans.sql", "plans.sql", "users.sql", "quota.sql", "usage.sql", "logging.sql", "revoked_tokens.sql", "admin_audit_log.sql"]
+    schemas = ["scans.sql", "plans.sql", "users.sql", "quota.sql", "usage.sql", "logging.sql", "revoked_tokens.sql", "admin_audit_log.sql", "chat.sql"]
     conn = get_connection()
 
     for filename in schemas:
