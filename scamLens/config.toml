@@ -11,6 +11,9 @@ level = "INFO"
 [logging]
 trust_proxy = false
 
+[domain]
+cache_size = 4096
+
 [cors]
 enabled = true
 allow_credentials = true
@@ -44,6 +47,7 @@ read = 3.0
 max_keepalive_connections = 20
 max_connections = 50
 rotate_user_agent = true
+max_body_bytes = 2097152
 
 [rdap]
 http2 = false
@@ -70,7 +74,9 @@ scamlens_db_path = "providers/storage/db/scamlens.db"
 timeout = 6.0
 threads = 3
 cache = true
-k = 5 
+k = 5
+score_model = "grouped"
+cache_ttl_seconds = 300
 max_redirects = 10
 retries = 3
 

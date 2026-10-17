@@ -1,151 +1,34 @@
-# Sistema de Scoring
+# Pontuação no scurl 1.2.0
 
-O scurl usa um modelo híbrido de três etapas: média ponderada, transformação sigmoide e resolução contextual via dependências. O objetivo é produzir um score probabilístico que separe com clareza infraestrutura legítima de suspeita, evitando acumulação linear excessiva de sinais moderados.
+O cálculo padrão agora é `grouped`. A agregação antiga continua disponível com `score_model="legacy"` ou `--score-model legacy` na CLI. O modo legacy usa as regras atuais; ele não reproduz exatamente o motor 1.1.0.
 
----
+O modelo continua usando média ponderada e sigmoide, com **k=5**. A mudança está na agregação:
 
-## Visão geral do fluxo
+1. Cada regra produz valor 0–1 ou None se não houver dados aplicáveis.
+2. Sua força é `min(valor, limite_da_regra) * min(peso/3, 1)`.
+3. Cada família conserva apenas sua maior força, evitando somar indícios correlacionados.
+4. As três famílias mais fortes ocupam slots de pesos 3, 2 e 1; slots vazios valem zero como falta de suporte.
+5. A média bruta é `(3*a + 2*b + c)/6`.
+6. A curva final é `100/(1 + exp(-k*(x-0.5)))`.
 
-```
-Resultados das heurísticas (normalized, weight)
-        │
-        ▼
-apply_dependencies      ← ajusta normalized e weight com base em contexto
-        │
-        ▼
-weighted_average        ← média ponderada dos valores ajustados
-        │
-        ▼
-sigmoid(k=5)            ← transforma para escala 0–100
-        │
-        ▼
-classify(score)         ← risk_level e verdict
-```
+Os limites e as famílias ficam em `scoring/calibration.py`. Os pesos de infraestrutura, recursos de CDN e configurações de e-mail foram reduzidos em importância. Um certificado válido, o domínio antigo e o DNS saudável não apagam evidência de envio de senhas a outro domínio.
 
----
+No modelo grouped, reputação tem uma política explícita: se o provider Safe Browsing retornar uma ameaça, a média bruta tem piso 0,95 antes da sigmoide. Com k=5 isso resulta em pelo menos **90,47**. Erros HTTP/API, chave ausente e falhas de rede não são convertidos em reputação limpa. Os tipos de ameaça não identificam necessariamente phishing; malware e software indesejado também são sinalizados.
 
-## Etapa 1 — Filtragem
+`scoring` expõe família, força, regra vencedora, slots, média e aplicação do piso. `rules` lista todas as regras, incluindo indisponíveis/falhas. `heuristics` conserva a lista de valores positivos para compatibilidade. `contribution` permanece o produto diagnóstico valor*peso; a contribuição efetiva para o cálculo agrupado está em `effective_strength` e nos slots de `scoring`.
 
-Antes de qualquer cálculo, o pipeline em `score.py` itera sobre `ctx.results` e filtra os resultados:
+As faixas de classificação permanecem: <10 very low/safe; <25 low/safe; <40 moderate/suspicious; <55 elevated/suspicious; <70 high/dangerous; <85 very high/dangerous; >=85 critical/malicious. A classificação usa o valor sem arredondamento.
 
-- `normalized = None` → heurística não aplicável, excluída completamente
-- `normalized = 0` → sinal confirmado como baixo, também excluído para não inflar o denominador
+A escala nominal é 0–100. Com k=5 os extremos atingíveis pela curva são 7,59 e 92,41. Score não é probabilidade de malware ou de phishing. Uma análise sem evidências suficientes não certifica segurança.
 
-Apenas resultados com `normalized > 0` entram no cálculo.
+## Calibração e alcance
 
----
+Foram avaliadas 96 combinações de k, pesos dos slots e limites lexicais. A seleção usou 2.000 URLs de desenvolvimento do PhiUSIIL (1.000 por classe), com objetivo explícito `FNR + 5*FPR`, além de duas restrições: cenário neutro abaixo de 10 e HTTP isolado abaixo de 25. Esse custo prefere reduzir falsos alertas, aceitando mais falsos negativos.
 
-## Etapa 2 — Média ponderada
+A combinação escolhida manteve k=5, slots 3/2/1 e limite 0,6 para entropia do domínio/subdomínio. Valores genéricos de infraestrutura não foram transformados em certezas. Outros limites são decisões de engenharia documentadas no código, não parâmetros aprendidos no conjunto de teste.
 
-```python
-weighted_score = Σ(score_i × weight_i) / Σ(weight_i)
-```
+A avaliação final usou mais 2.000 URLs, com domínios registráveis distintos do desenvolvimento e de uma amostra exploratória intermediária. Nenhuma URL do dataset foi visitada. O dataset fornece URLs/atributos históricos; este experimento usa **somente a string da URL**, sem reconstruir HTML, TLS, DNS, RDAP ou reputação a partir de atributos precomputados.
 
-Implementado em `core/scoring/weighted_average.py`. Pares onde `score` é `None` são ignorados tanto no numerador quanto no denominador — sem penalização por dados indisponíveis.
+No teste final, falsos positivos passaram de 8,2% para 0,9%, enquanto recall passou de 57,8% para 47,4%. Logo não há melhora universal de detecção. As correções dos formulários e JavaScript foram verificadas separadamente com HTML sintético. A detecção completa precisa de corpus independente com HTML/metadata e medições em ambiente com rede funcional. `calibrated=false` permanece: isto não é calibração probabilística nem validação do scanner completo em produção.
 
-Se a soma dos pesos for zero (nenhuma heurística aplicável), retorna `0.0`.
-
-**Exemplo:**
-
-```python
-weighted_average([0.5, 0.7], [0.2, 0.8])
-# → (0.5×0.2 + 0.7×0.8) / (0.2 + 0.8) = 0.66
-```
-
----
-
-## Etapa 3 — Transformação sigmoide
-
-```python
-sigmoid(x) = (1 / (1 + exp(-k × (x - 0.5)))) × 100
-```
-
-Implementado em `core/scoring/sigmoid.py`. Recebe as listas de scores e weights e chama `weighted_average` internamente.
-
-O parâmetro `k = 5` (padrão) controla a inclinação da curva. O ponto de inflexão está em `x = 0.5`, que mapeia para score `50`.
-
-**Comportamento da curva com k=5:**
-
-| Média ponderada | Score final |
-|---|---|
-| 0.10 | ~7.3 |
-| 0.25 | ~18.2 |
-| 0.50 | 50.0 |
-| 0.75 | ~81.8 |
-| 0.90 | ~92.7 |
-
-A transformação sigmoide resolve o problema da linearidade: sinais moderados acumulam menos risco do que acumulariam numa média simples, e scores extremos (próximos de 0 ou 100) só aparecem quando há convergência forte de sinais.
-
-**Por que k=5 e não outro valor?**
-
-Com k=5, a curva é suficientemente sensível para separar infraestrutura limpa (8–15) de suspeita (50+) sem tornar o sistema agressivo demais. Valores maiores de k criariam uma transição mais abrupta — qualquer média ponderada acima de 0.5 seria mapeada para scores muito altos, aumentando falsos positivos.
-
----
-
-## Etapa 4 — Resolução contextual (dependências)
-
-Executada em `apply_dependencies` **antes** da média ponderada. Para cada heurística, o sistema verifica o `DEPENDENCIES` dict e aplica ajustes ao `normalized` e `weight` com base nos valores de outras heurísticas no `results_map`.
-
-As três ações disponíveis:
-
-| Ação | Efeito |
-|---|---|
-| `reduce` | Multiplica `normalized` pelo `factor` (< 1.0) — atenua o sinal |
-| `increase` | Multiplica `normalized` pelo `factor` (> 1.0) — amplifica o sinal, cap em 1.0 |
-| `skip` | Define `normalized = None` — remove a heurística do cálculo |
-
-**Resolução de conflito:** quando `reduce` e `increase` disparam simultaneamente para a mesma heurística, `reduce` vence. Isso implementa o conservadorismo do sistema — falsos positivos são mais custosos do que falsos negativos em contextos de triagem.
-
----
-
-## Etapa 5 — Classificação
-
-O score final (0–100) é passado para `classify()` em `core/engine/analysis/classification.py`, que retorna `risk_level` e `verdict`:
-
-| Score | risk_level | verdict |
-|---|---|---|
-| 0–20 | very low | safe |
-| 21–40 | low | safe |
-| 41–60 | medium | suspicious |
-| 61–80 | high | suspicious |
-| 81–100 | very high | unsafe |
-
----
-
-## Contribuição por heurística
-
-O campo `contribution` exibido na saída CLI e retornado pela API é calculado como:
-
-```python
-contribution = round(normalized_ajustado × weight_ajustado, 1)
-```
-
-Esse valor permite identificar quais heurísticas tiveram maior impacto no score final. Uma heurística com `value = 0.92` e `weight = 3.5` tem `contribution = 3.2` — muito mais impacto do que uma com `value = 0.04` e `weight = 2.0` (`contribution = 0.1`).
-
----
-
-## Exemplo concreto
-
-Scan do `ca-app-49.info` (score final: 51.04):
-
-```
-hyphen_risk:     normalized=0.40, weight=2.5  →  contribution=1.0
-num_ratio_risk:  normalized=0.36, weight=2.0  →  contribution=0.7
-dns_score:       normalized=0.92, weight=3.5  →  contribution=3.2
-ssl_score:       normalized=0.26, weight=3.5  →  contribution=0.9
-```
-
-Média ponderada:
-```
-(0.40×2.5 + 0.36×2.0 + 0.92×3.5 + 0.26×3.5) / (2.5 + 2.0 + 3.5 + 3.5)
-= (1.0 + 0.72 + 3.22 + 0.91) / 11.5
-= 5.85 / 11.5
-≈ 0.509
-```
-
-Sigmoid com k=5:
-```
-(1 / (1 + exp(-5 × (0.509 - 0.5)))) × 100 ≈ 51.2
-```
-
-O valor exato retornado foi 51.04 — a pequena diferença se deve aos ajustes aplicados por `apply_dependencies` antes do cálculo.
+Consulte `evaluation-report.md` e `evaluation-report.json` para métricas, limites, scripts, parâmetros e origem dos dados.

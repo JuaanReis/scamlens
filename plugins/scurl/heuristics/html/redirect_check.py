@@ -1,52 +1,47 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urljoin
 from plugins.scurl.models.result_base import ResultBase
-from plugins.scurl.parsers.normalize_domain import normalize_domain
+from plugins.scurl.parsers.resources import external
 from ..registry import register
 
-JS_ASSIGNMENT_PATTERN = re.compile(
-    r'(?:window\.location|window\.location\.href|location\.replace\s*\()\s*=\s*["\']([^"\']+)["\']'
+ASSIGN = re.compile(r"(?:window\.)?location(?:\.href)?\s*=\s*['\"]([^'\"]+)['\"]", re.I)
+CALL = re.compile(
+    r"(?:window\.)?location\.(?:replace|assign)\s*\(\s*['\"]([^'\"]+)['\"]", re.I
 )
 
-@register(name="redirect_check", category="html", severity="high", weight=3.0, tags=["html", "redirect", "phishing"])
-def redirect_check(structure: dict) -> ResultBase:
+
+@register(
+    name="redirect_check",
+    category="html",
+    severity="low",
+    weight=1.0,
+    tags=["html", "redirect"],
+)
+def redirect_check(structure):
     tree = structure.get("html_parser")
     if tree is None:
-        return ResultBase(
-            value=0,
-            normalized=None,
-            details={
-                "error": "HTML não disponível"
-            }
-        )
-
-    original_domain = structure.get("hostname", "")
+        return ResultBase(0, None, {"error": "HTML não disponível"})
     redirects = []
-
-    for meta in tree.css('meta[http-equiv="refresh"]'):
-        content = meta.attributes.get("content", "")
-        if "url=" in content.lower():
-            url_part = content.lower().split("url=")[-1].strip()
-            parsed = urlparse(url_part)
-            if parsed.netloc and normalize_domain(parsed.netloc) != normalize_domain(original_domain):
-                redirects.append({"type": "meta_refresh", "target": url_part})
-
-    for script in tree.css("script"):
+    for node in tree.css("meta[http-equiv]"):
+        if node.attributes.get("http-equiv", "").lower() != "refresh":
+            continue
+        match = re.search(r"url\s*=\s*(.+)", node.attributes.get("content", ""), re.I)
+        if match:
+            target = match.group(1).strip().strip("'\"")
+            if external(target, structure):
+                redirects.append(dict(type="meta_refresh", target=target))
+    for script in tree.css("script:not([src])"):
         text = script.text() or ""
-        for match in JS_ASSIGNMENT_PATTERN.finditer(text):
-            target = match.group(1)
-            parsed = urlparse(target)
-            if parsed.netloc and normalize_domain(parsed.netloc) != normalize_domain(original_domain):
-                redirects.append({"type": "js_redirect", "target": target})
-
-    has_redirect = len(redirects) > 0
-
+        for pattern in (ASSIGN, CALL):
+            for match in pattern.finditer(text):
+                if external(match.group(1), structure):
+                    redirects.append(dict(type="js_redirect", target=match.group(1)))
     return ResultBase(
-        value=1.0 if has_redirect else 0.0,
-        normalized=1.0 if has_redirect else None,
-        details={
-            "has_external_redirect": has_redirect,
-            "redirect_count": len(redirects),
-            "redirects": redirects
-        }
+        len(redirects),
+        0.3 if redirects else 0,
+        dict(
+            has_external_redirect=bool(redirects),
+            redirect_count=len(redirects),
+            redirects=redirects[:12],
+        ),
     )

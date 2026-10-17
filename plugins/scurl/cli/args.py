@@ -2,6 +2,7 @@ from argparse import ArgumentParser, Namespace
 from plugins.scurl.cli.output.formatter import set_color
 from plugins.scurl import config
 
+
 def parse_args() -> Namespace | None:
     parse = ArgumentParser(description="scurl CLI version")
     parse.add_argument("--url", "-u", type=str)
@@ -10,7 +11,10 @@ def parse_args() -> Namespace | None:
     parse.add_argument("--threads", "-t", type=int, default=1)
     parse.add_argument("--output", "-o", type=str)
     parse.add_argument("--timeout", "-T", type=float, default=5)
-    parse.add_argument("-k", type=int, default=5)
+    parse.add_argument("-k", type=float, default=5)
+    parse.add_argument(
+        "--score-model", choices=("grouped", "legacy"), default="grouped"
+    )
     parse.add_argument("--retries", "-r", type=int, default=3)
     parse.add_argument("--disable-color", "-dc", action="store_true")
     parse.add_argument("--cache", "-c", action="store_true", default=False)

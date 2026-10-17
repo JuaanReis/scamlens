@@ -1,80 +1,67 @@
-import copy
-import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
-from plugins.scurl.models.scan_context import ScanContext
+from math import isfinite
+from time import perf_counter
 from plugins.scurl.models.scan_result import ScanResult
 
-logger = logging.getLogger(__name__)
-
-MAX_SCAN_SECONDS = 15
-MAX_WORKERS = 8
-MIN_WORKERS = 1
-
-def execute_rules(ctx: ScanContext, rules: list, processors: int) -> dict | None:
-    workers = max(MIN_WORKERS, min(processors, MAX_WORKERS))
-    frozen = copy.deepcopy(dict(ctx.target.structure))
+def execute_rules(ctx, rules, processors=2):
+    start = perf_counter()
+    frozen = dict(ctx.target.structure)
+    frozen.update(ctx.target.final_structure)
+    frozen["original_url"] = ctx.target.url
     frozen["html_parser"] = ctx.target.html
     frozen["headers"] = dict(ctx.target.response.headers) if ctx.target.response else {}
-    frozen["dns"] = copy.deepcopy(ctx.target.dns)
-    frozen["ssl"] = copy.deepcopy(ctx.target.ssl)
-    frozen["rdap"] = copy.deepcopy(ctx.target.rdap)
-    frozen["safe_browsing"] = copy.deepcopy(ctx.target.safe_browsing)
+    for field in ("dns", "ssl", "rdap", "safe_browsing"):
+        frozen[field] = getattr(ctx.target, field)
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        future_map = {executor.submit(rule.fn, frozen): rule for rule in rules}
-        timed_out = False
-        futures_iter = as_completed(future_map, timeout=MAX_SCAN_SECONDS)
-
+    for rule in rules:
         try:
-            while True:
-                try:
-                    future = next(futures_iter)
-                except StopIteration:
-                    break
-                except FuturesTimeout:
-                    timed_out = True
-                    logger.error("Scan timeout para %s — aproveitando resultados parciais", ctx.target.url)
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    break
-
-                rule = future_map[future]
-                try:
-                    data = future.result()
-                except Exception as e:
-                    logger.error("Rule %s falhou com exceção: %s", rule.name, e, exc_info=True)
-                    continue
-
-                if data is None:
-                    logger.warning("Rule %s retornou None, ignorando", rule.name)
-                    continue
-
-                ctx.results.append(ScanResult(
+            data = rule.fn(frozen)
+            if data is None:
+                raise ValueError("rule returned None")
+            if data.normalized is not None and (
+                not isfinite(data.normalized) or not 0 <= data.normalized <= 1
+            ):
+                raise ValueError("invalid normalized score")
+            
+            ctx.results.append(
+                ScanResult(
                     name=rule.name,
                     value=data.normalized,
                     weight=rule.weight,
                     category=rule.category,
                     severity=rule.severity,
-                    details=data.details,
-                ))
+                    details=data.details or {},
+                )
+            )
+            
+            ctx.rule_status[rule.name] = (
+                "unavailable" if data.normalized is None else "ok"
+            )
 
-        except Exception as e:
-            logger.critical("Erro inesperado no loop de execução das rules: %s", e, exc_info=True)
-            return {
-                "status": "error",
-                "error": {
-                    "type": "execution_error",
-                    "message": str(e),
-                }
-            }
+        except Exception as exc:
+            ctx.results.append(
+                ScanResult(
+                    name=rule.name,
+                    value=None,
+                    weight=rule.weight,
+                    category=rule.category,
+                    severity=rule.severity,
+                    details={"error": type(exc).__name__},
+                )
+            )
 
-    if timed_out and not ctx.results:
-        return {
-            "status": "error",
-            "error": {
-                "type": "scan_timeout",
-                "message": "Scan excedeu o tempo limite e nenhuma rule completou",
-            }
-        }
+            ctx.rule_status[rule.name] = "error"
+            ctx.warnings.append(
+                "rule failed: " + rule.name + " (" + type(exc).__name__ + ")"
+            )
 
     ctx.results_map = {r.name: r.value for r in ctx.results}
+    ctx.meta.timings["heuristics_s"] = perf_counter() - start
+
+    if not any(r.value is not None for r in ctx.results):
+        return dict(
+            error=dict(
+                error_type="execution_error", message="Nenhuma regra pôde ser avaliada"
+            )
+        )
+    
     return None

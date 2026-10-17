@@ -29,7 +29,7 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TTL = timedelta(minutes=ttl_minutes)
 REFRESH_TTL = timedelta(days=ttl_days)
-_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
+_DUMMY_HASH = settings.auth_dummy_hash
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()

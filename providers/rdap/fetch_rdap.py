@@ -1,7 +1,7 @@
 import logging
 import threading
 import httpx
-import tldextract
+from providers.domain.structure import extract
 from .client import rdap_client
 from scamLens import config
 
@@ -12,20 +12,20 @@ _MAX_CONCURRENT_PER_SERVER = _rdap_config["max_concurrent_per_server"]
 _FALLBACK_MAX_CONCURRENT = _rdap_config["fallback_max_concurrent"]
 
 _RDAP_SERVERS: dict[str, str] = {
-    "com":  "https://rdap.verisign.com/com/v1/domain/",
-    "net":  "https://rdap.verisign.com/net/v1/domain/",
-    "org":  "https://rdap.publicinterestregistry.org/rdap/domain/",
-    "io":   "https://rdap.nic.io/domain/",
-    "br":   "https://rdap.registro.br/domain/",
-    "gov":  "https://rdap.arin.net/registry/domain/",
-    "edu":  "https://rdap.arin.net/registry/domain/",
+    "com": "https://rdap.verisign.com/com/v1/domain/",
+    "net": "https://rdap.verisign.com/net/v1/domain/",
+    "org": "https://rdap.publicinterestregistry.org/rdap/domain/",
+    "io": "https://rdap.nic.io/domain/",
+    "br": "https://rdap.registro.br/domain/",
+    "gov": "https://rdap.arin.net/registry/domain/",
+    "edu": "https://rdap.arin.net/registry/domain/",
     "info": "https://rdap.afilias.info/rdap/info/domain/",
-    "biz":  "https://rdap.nic.biz/domain/",
-    "co":   "https://rdap.nic.co/domain/",
-    "us":   "https://rdap.arin.net/registry/domain/",
-    "uk":   "https://rdap.nominet.uk/uk/domain/",
-    "de":   "https://rdap.denic.de/domain/",
-    "fr":   "https://rdap.nic.fr/domain/",
+    "biz": "https://rdap.nic.biz/domain/",
+    "co": "https://rdap.nic.co/domain/",
+    "us": "https://rdap.arin.net/registry/domain/",
+    "uk": "https://rdap.nominet.uk/uk/domain/",
+    "de": "https://rdap.denic.de/domain/",
+    "fr": "https://rdap.nic.fr/domain/",
     "host": "https://rdap.centralnic.com/host/domain/",
 }
 
@@ -35,6 +35,7 @@ _cache: dict[str, dict | None] = {}
 _cache_lock = threading.Lock()
 _semaphores: dict[str, threading.Semaphore] = {}
 _sem_lock = threading.Lock()
+
 
 def _get_semaphore(server_base: str) -> threading.Semaphore:
     with _sem_lock:
@@ -49,12 +50,14 @@ def _get_semaphore(server_base: str) -> threading.Semaphore:
 
         return _semaphores[server_base]
 
+
 def _server_base(url: str) -> str:
     parts = url.split("/")
     return "/".join(parts[:3])
 
+
 def resolve_rdap_url(hostname: str) -> tuple[str, str]:
-    extracted = tldextract.extract(hostname)
+    extracted = extract(hostname)
 
     registered = f"{extracted.domain}.{extracted.suffix}"
     tld = extracted.suffix.lower()
@@ -62,6 +65,7 @@ def resolve_rdap_url(hostname: str) -> tuple[str, str]:
     base = _RDAP_SERVERS.get(tld, _RDAP_FALLBACK)
 
     return f"{base}{registered}", registered
+
 
 def fetch_rdap(hostname: str) -> dict | None:
     if not hostname:
@@ -125,11 +129,7 @@ def fetch_rdap(hostname: str) -> dict | None:
             )
 
         except httpx.HTTPStatusError as e:
-            status = (
-                e.response.status_code
-                if e.response is not None
-                else 0
-            )
+            status = e.response.status_code if e.response is not None else 0
 
             logger.warning(
                 "GET %s status=%d error=http",
@@ -155,6 +155,7 @@ def fetch_rdap(hostname: str) -> dict | None:
             _cache[registered] = result
 
     return result
+
 
 def clear_cache() -> None:
     with _cache_lock:

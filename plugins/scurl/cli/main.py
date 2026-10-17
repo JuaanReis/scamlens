@@ -1,44 +1,44 @@
 from sys import exit
-try:
-    from plugins.scurl.engine.main import run_engine
-    from plugins.scurl.cli.output import print_output
-    from plugins.scurl.cli.output.store_output import save_output
-    from .args import parse_args
-    from providers.database.connection import init_db
-except KeyboardInterrupt:
-    print("FALHA keyboard_interrupt: Execução interrompida pelo usuário")
-    exit(0)
+from plugins.scurl.engine.main import run_engine
+from plugins.scurl.cli.output import print_output
+from plugins.scurl.cli.output.store_output import save_output
+from .args import parse_args
+from providers.database.connection import init_db
 
 def main():
     try:
         args = parse_args()
-        cache = args.cache
-        url = args.url
-        start = None
-        if cache:
-            from time import time
-            start = time()
+        if args.cache:
             init_db()
-
+        scan, target = run_engine(
+            args.url,
+            args.k,
+            args.timeout,
+            args.threads,
+            args.retries,
+            use_cache=args.cache,
+            score_model=args.score_model,
+        )
         if args.output == "-":
-            scan, target = run_engine(url, args.k, args.timeout, args.threads, args.retries, use_cache=cache)
             save_output("-", scan, target)
-            return
-
-        scan, target = run_engine(url, args.k, args.timeout, args.threads, args.retries, use_cache=cache)
-
-        print_output(scan, target, args.verbose, start)
-
-        if args.output:
-            save_output(args.output, scan, target)
-            print(f"\nSaída salva em {args.output}")
-
+        else:
+            print_output(scan, target, args.verbose, None)
+            if args.output:
+                save_output(args.output, scan, target)
+                print(f"\nSaída salva em {args.output}")
+        if scan.get("status") == "error":
+            return 2
+        return (
+            1
+            if scan.get("result", {}).get("verdict")
+            in ("suspicious", "dangerous", "malicious")
+            else 0
+        )
     except KeyboardInterrupt:
-        exit(0)
-
-    except Exception as e:
-        print(f"FALHA {str(e)}")
-        exit(1)
+        return 130
+    except Exception as exc:
+        print(f"FALHA {exc}")
+        return 2
 
 if __name__ == "__main__":
-    main()
+    exit(main())

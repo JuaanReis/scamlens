@@ -10,7 +10,14 @@ Os módulos importados são utilizados durante o processo de inspeção para com
 Este arquivo não executa lógica de análise diretamente, funcionando apenas como ponto de integração entre os componentes do sistema.
 """
 
-from plugins.scurl.heuristics.html import image_check, inline_data_css, missing_form_tag, password_input
+from plugins.scurl.heuristics.html import credential_signals
+from plugins.scurl.heuristics.url import deception
+from plugins.scurl.heuristics.html import (
+    image_check,
+    inline_data_css,
+    missing_form_tag,
+    password_input,
+)
 from plugins.scurl.heuristics.server import domain_age
 from plugins.scurl.heuristics.url import character
 from plugins.scurl.heuristics.url import parts
@@ -23,4 +30,10 @@ from plugins.scurl.heuristics.server import nameserver_diversity
 from plugins.scurl.heuristics.url import domain
 from plugins.scurl.heuristics.url.typos import typosquatting
 from plugins.scurl.heuristics.server import safe_browsing
-from plugins.scurl.heuristics.html import clients_hint, external_script, favicon_check, form_action, hidden_fields
+from plugins.scurl.heuristics.html import (
+    clients_hint,
+    external_script,
+    favicon_check,
+    form_action,
+    hidden_fields,
+)

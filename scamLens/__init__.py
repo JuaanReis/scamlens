@@ -41,6 +41,7 @@ class Settings:
     password_admin: str
     jwt_secret: str
     google_safe_browsing_key: str
+    auth_dummy_hash: str
     environment: str = "production"
 
     @property
@@ -57,5 +58,6 @@ def get_settings() -> Settings:
         password_admin = environ["PASSWORD_ADMIN"],
         jwt_secret = environ["JWT_SECRET"],
         google_safe_browsing_key = environ["GOOGLE_SAFE_BROWSING_KEY"],
+        auth_dummy_hash = environ["AUTH_DUMMY_HASH"],
         environment = env,
     )

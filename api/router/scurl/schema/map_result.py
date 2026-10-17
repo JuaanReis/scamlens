@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 from typing import Any
 
 class AnalyzeRequest(BaseModel):
@@ -26,6 +26,8 @@ class Stats(BaseModel):
     rules_total: int
     rules_triggered: int
     trigger_rate: float
+    rules_evaluated: int = 0
+    rules_failed: int = 0
 
 class Heuristic(BaseModel):
     name: str
@@ -44,6 +46,11 @@ class ScanResponse(BaseModel):
     stats: Stats
     heuristics: list[Heuristic]
     insight: list[str]
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    scoring: dict[str, Any] = Field(default_factory=dict)
+    timings: dict[str, float] = Field(default_factory=dict)
+    coverage: dict[str, bool] = Field(default_factory=dict)
 
 class Identity(BaseModel):
     original_url: str
@@ -141,11 +148,11 @@ class DNS(BaseModel):
     ns: list[str]
     cname: list[str]
     txt: list[str]
-    spf: bool
-    dmarc: bool
+    spf: bool | None
+    dmarc: bool | None
     dkim: bool | None
     ttl: int | None
-    has_mx: bool
+    has_mx: bool | None
 
 class Compression(BaseModel):
     enabled: bool

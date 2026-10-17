@@ -1,90 +1,55 @@
-import logging
 import dns.resolver
+from time import perf_counter
 
-
-logger = logging.getLogger("scanner.dns")
-
-
-def _resolve(hostname: str, record_type: str) -> tuple[list, int | None]:
+def _resolve(hostname, record_type, timeout=2):
     try:
-        answers = dns.resolver.resolve(hostname, record_type)
-        records = [r.to_text() for r in answers]
-        ttl = answers.rrset.ttl
-        return records, ttl
+        answer = dns.resolver.resolve(hostname, record_type, lifetime=timeout)
+        return [r.to_text() for r in answer], answer.rrset.ttl, None
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+        return [], None, None
+    except Exception as exc:
+        return [], None, type(exc).__name__
 
-    except Exception:
-        return [], None
+def get_dns_info(hostname, timeout=2, include_mail=False):
+    hostname = hostname.strip().lower().rstrip(".")
+    data = {}
+    errors = {}
+    ttl = None
+    deadline = perf_counter() + timeout
+    for kind in ("A", "AAAA", "NS", "CNAME"):
+        remaining = deadline - perf_counter()
+        records, record_ttl, error = (
+            _resolve(hostname, kind, max(0.05, remaining))
+            if remaining > 0
+            else ([], None, "budget_exhausted")
+        )
 
-
-def _extract_spf(txt_records: list[str]) -> bool:
-    return any(r.strip('"').startswith("v=spf1") for r in txt_records)
-
-
-def _extract_dmarc(hostname: str) -> bool:
-    records, _ = _resolve(f"_dmarc.{hostname}", "TXT")
-    return any("v=DMARC1" in r for r in records)
-
-
-def _extract_dkim(hostname: str, selector: str = "default") -> bool:
-    records, _ = _resolve(f"{selector}._domainkey.{hostname}", "TXT")
-    return any("v=DKIM1" in r for r in records)
-
-
-def get_dns_info(hostname: str) -> dict:
-    hostname = hostname.removeprefix("www.").strip().lower()
-
-    a_records, ttl = _resolve(hostname, "A")
-    aaaa_records, _ = _resolve(hostname, "AAAA")
-    ns_records, _ = _resolve(hostname, "NS")
-    cname_records, _ = _resolve(hostname, "CNAME")
-    txt_records, _ = _resolve(hostname, "TXT")
-
-    mx_raw, _ = _resolve(hostname, "MX")
-
-    mx_records = []
-
-    for entry in mx_raw:
-        parts = entry.split()
-
-        if len(parts) == 2:
-            mx_records.append({
-                "priority": int(parts[0]),
-                "host": parts[1].rstrip("."),
-            })
-        else:
-            mx_records.append({
-                "priority": None,
-                "host": entry,
-            })
-
-    spf = _extract_spf(txt_records)
-    dmarc = _extract_dmarc(hostname)
-    dkim = _extract_dkim(hostname)
-
-    logger.info(
-        "%s a=%d aaaa=%d mx=%d ns=%d cname=%d txt=%d spf=%s dmarc=%s dkim=%s",
-        hostname,
-        len(a_records),
-        len(aaaa_records),
-        len(mx_records),
-        len(ns_records),
-        len(cname_records),
-        len(txt_records),
-        spf,
-        dmarc,
-        dkim,
+        data[kind.lower()] = [x.rstrip(".") for x in records]
+        if kind == "A":
+            ttl = record_ttl
+        if error:
+            errors[kind] = error
+            
+    data.update(
+        mx=[],
+        txt=[],
+        spf=None,
+        dmarc=None,
+        dkim=None,
+        ttl=ttl,
+        has_mx=None,
+        errors=errors,
     )
 
-    return {
-        "a": a_records,
-        "aaaa": aaaa_records,
-        "mx": mx_records,
-        "ns": [r.rstrip(".") for r in ns_records],
-        "cname": [r.rstrip(".") for r in cname_records],
-        "txt": txt_records,
-        "spf": spf,
-        "dmarc": dmarc,
-        "dkim": dkim,
-        "ttl": ttl,
-        "has_mx": len(mx_records) > 0,
-    }
+    if include_mail:
+        mx, _, error = _resolve(hostname, "MX", timeout)
+        data["mx"] = [
+            dict(priority=int(x.split()[0]), host=x.split()[-1].rstrip("."))
+            for x in mx
+            if len(x.split()) == 2
+        ]
+        txt, _, _ = _resolve(hostname, "TXT", timeout)
+        data.update(
+            txt=txt, has_mx=bool(mx), spf=any("v=spf1" in x.lower() for x in txt)
+        )
+    return data

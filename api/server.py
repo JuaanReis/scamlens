@@ -31,7 +31,7 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
 
     if LOGS_ENABLED:
-        initialize_logging(START) # Initialize logging with the server startup time
+        initialize_logging(perf_counter() - START) # Initialize logging with the server startup time
 
     try:
         init_db()

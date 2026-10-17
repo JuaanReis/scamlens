@@ -1,4 +1,4 @@
-from time import time
+from time import time, perf_counter
 from plugins.math.shannon_entropy import shannon_entropy
 from plugins.scurl.models.scan_context import ScanContext
 from plugins.scurl.engine.analysis.insights import insights
@@ -13,14 +13,12 @@ def _build_identity(ctx: ScanContext) -> dict:
     registered_domain = structure.get("registered_domain", "")
 
     try:
-        hostname.encode("ascii")
-        is_idn = False
-        punycode = hostname
-        unicode_domain = hostname
-    except UnicodeEncodeError:
-        is_idn = True
         punycode = hostname.encode("idna").decode("ascii")
-        unicode_domain = hostname
+        unicode_domain = punycode.encode("ascii").decode("idna")
+        is_idn = unicode_domain != punycode
+    except UnicodeError:
+        is_idn = False
+        punycode = unicode_domain = hostname
 
     return {
         "original_url": structure.get("url", ""),
@@ -39,7 +37,7 @@ def _build_identity(ctx: ScanContext) -> dict:
         "punycode": punycode,
         "unicode_domain": unicode_domain,
         "is_idn": is_idn,
-        "is_homograph": False,  
+        "is_homograph": bool(ctx.results_map.get("unicode_mixed_script")),
         "is_https": structure.get("scheme", "").lower() == "https",
         "domain_length": structure.get("domain_length", 0),
         "domain_entropy": round(shannon_entropy(registered_domain), 5),
@@ -55,26 +53,31 @@ def _build_network(ctx: ScanContext) -> dict:
     return {
         "ipv4": dns.get("a", []),
         "ipv6": dns.get("aaaa", []),
-        "reverse_dns": None,     
-        "asn": None,              
-        "geo": None,              
-        "isp": None,              
-        "cdn": None,             
-        "waf": None,             
-        "http_version": None,    
+        "reverse_dns": None,
+        "asn": None,
+        "geo": None,
+        "isp": None,
+        "cdn": None,
+        "waf": None,
+        "http_version": None,
         "timings": {
             "total_ms": round(response.elapsed * 1000) if response else None,
-            "dns_ms": None,       
+            "dns_ms": None,
             "tcp_ms": None,
             "tls_ms": None,
             "ttfb_ms": None,
-        }
+        },
     }
 
 def _build_tls(ctx: ScanContext) -> dict:
     ssl = ctx.target.ssl or {}
 
-    if not ssl or ssl.get("connection_error") or ssl.get("timeout") or ssl.get("unknown"):
+    if (
+        not ssl
+        or ssl.get("connection_error")
+        or ssl.get("timeout")
+        or ssl.get("unknown")
+    ):
         return {"enabled": False}
 
     issuer = ssl.get("issuer_detail") or {}
@@ -128,15 +131,26 @@ def _build_http(ctx: ScanContext) -> dict:
     content_type = headers.get("content-type", "")
     encoding = headers.get("content-encoding", "")
 
-    compression_map = {"br": "brotli", "gzip": "gzip", "deflate": "deflate", "zstd": "zstd"}
+    compression_map = {
+        "br": "brotli",
+        "gzip": "gzip",
+        "deflate": "deflate",
+        "zstd": "zstd",
+    }
 
     security_headers = {
-        k: v for k, v in headers.items()
-        if k.lower() in {
-            "content-security-policy", "strict-transport-security",
-            "x-frame-options", "x-content-type-options",
-            "referrer-policy", "permissions-policy",
-            "cross-origin-opener-policy", "cross-origin-resource-policy"
+        k: v
+        for k, v in headers.items()
+        if k.lower()
+        in {
+            "content-security-policy",
+            "strict-transport-security",
+            "x-frame-options",
+            "x-content-type-options",
+            "referrer-policy",
+            "permissions-policy",
+            "cross-origin-opener-policy",
+            "cross-origin-resource-policy",
         }
     }
 
@@ -151,13 +165,13 @@ def _build_http(ctx: ScanContext) -> dict:
         "encoding": encoding,
         "compression": {
             "enabled": encoding in compression_map,
-            "algorithm": compression_map.get(encoding)
+            "algorithm": compression_map.get(encoding),
         },
         "server": headers.get("server"),
         "alt_svc": headers.get("alt-svc"),
         "keep_alive": "keep-alive" in headers.get("connection", "").lower(),
         "security_headers": security_headers,
-        "cookies": None,  
+        "cookies": None,
     }
 
 def _build_content(ctx: ScanContext) -> dict:
@@ -239,9 +253,11 @@ def _build_content(ctx: ScanContext) -> dict:
 
     try:
         meta_tags = {
-            node.attributes.get("name") or node.attributes.get("property"): node.attributes.get("content")
+            node.attributes.get("name")
+            or node.attributes.get("property"): node.attributes.get("content")
             for node in root.css("meta")
-            if (node.attributes.get("name") or node.attributes.get("property")) and node.attributes.get("content")
+            if (node.attributes.get("name") or node.attributes.get("property"))
+            and node.attributes.get("content")
         }
     except Exception:
         meta_tags = {}
@@ -257,7 +273,14 @@ def _build_content(ctx: ScanContext) -> dict:
     html_hash = hashlib.sha256(body_html.encode()).hexdigest() if body_html else None
     spa = any(
         root.css_first(sel) is not None
-        for sel in ["[ng-app]", "[data-reactroot]", "[data-react-helmet]", "#__next", "#app", "#vue-app"]
+        for sel in [
+            "[ng-app]",
+            "[data-reactroot]",
+            "[data-react-helmet]",
+            "#__next",
+            "#app",
+            "#vue-app",
+        ]
     )
 
     return {
@@ -315,7 +338,9 @@ def _build_domain(ctx: ScanContext) -> dict:
     age_days = None
     if created_at:
         try:
-            delta = datetime.now(timezone.utc) - datetime.fromisoformat(created_at).replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - datetime.fromisoformat(
+                created_at
+            ).replace(tzinfo=timezone.utc)
             age_days = delta.days
         except Exception:
             pass
@@ -345,31 +370,25 @@ def build_error_response(ctx: ScanContext, error_type: str, message: str) -> dic
         "status": "error",
         "meta": {
             "url": ctx.target.url,
-            "scan_time_s": round(time() - ctx.meta.start, 3),
-            "version": __version__
+            "scan_time_s": round(perf_counter() - ctx.meta.monotonic_start, 3),
+            "version": __version__,
         },
-        "error": {
-            "type": error_type,
-            "message": message
-        }
+        "error": {"type": error_type, "message": message},
     }
 
 def build_scan(ctx: ScanContext, rules_total: int) -> dict:
     rules_triggered = len(ctx.heuristics)
 
     return {
-        "status": "ok",
-        "engine": {
-            "name": "scurl",
-            "version": __version__
-        },
+        "status": "partial" if ctx.warnings else "ok",
+        "engine": {"name": "scurl", "version": __version__},
         "meta": {
             "scan_id": ctx.meta.scan_id,
-            "scan_time_s": round(time() - ctx.meta.start, 3),
+            "scan_time_s": round(perf_counter() - ctx.meta.monotonic_start, 3),
             "url_hash": ctx.meta.url_hash,
             "url": ctx.target.url,
             "threads": ctx.meta.threads,
-            "timestamp": ctx.meta.timestamp.isoformat()
+            "timestamp": ctx.meta.timestamp.isoformat(),
         },
         "result": {
             "score": round(ctx.score, 2),
@@ -378,13 +397,27 @@ def build_scan(ctx: ScanContext, rules_total: int) -> dict:
         },
         "stats": {
             "rules_total": rules_total,
+            "rules_evaluated": sum(v == "ok" for v in ctx.rule_status.values()),
+            "rules_failed": sum(v == "error" for v in ctx.rule_status.values()),
             "rules_triggered": rules_triggered,
-            "trigger_rate": round(rules_triggered / rules_total, 3) if rules_total else 0
+            "trigger_rate": (
+                round(rules_triggered / rules_total, 3) if rules_total else 0
+            ),
         },
         "heuristics": ctx.heuristics,
-        "insight": insights(ctx.heuristics, ctx.score)
+        "rules": ctx.all_heuristics,
+        "warnings": ctx.warnings,
+        "scoring": ctx.scoring,
+        "coverage": dict(
+            html=ctx.target.html is not None,
+            rdap=ctx.target.rdap is not None,
+            dns=ctx.target.dns is not None,
+            safe_browsing=ctx.target.safe_browsing is not None,
+            tls=bool(ctx.target.ssl and ctx.target.ssl.get("enabled")),
+        ),
+        "timings": {k: round(v, 6) for k, v in ctx.meta.timings.items()},
+        "insight": insights(ctx.heuristics, ctx.score),
     }
-
 
 def build_response(ctx: ScanContext, rules_total: int) -> tuple[dict, dict]:
     return build_scan(ctx, rules_total), build_target(ctx)

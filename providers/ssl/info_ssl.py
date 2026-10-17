@@ -8,18 +8,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID
-import urllib.request
+from functools import lru_cache
 
 logger = logging.getLogger("scanner.ssl")
-
-def _check_ocsp_stapling(ssock: ssl.SSLSocket) -> bool | None:
-    try:
-        if ssock.version() == "TLSv1.3":
-            return None
-        response = ssock.get_channel_binding("tls-unique")
-        return response is not None
-    except Exception:
-        return None
 
 def _public_key_algorithm(cert_obj: x509.Certificate) -> str | None:
     pub = cert_obj.public_key()
@@ -33,57 +24,45 @@ def _public_key_algorithm(cert_obj: x509.Certificate) -> str | None:
         return "Ed448"
     return None
 
+
 def _sig_algorithm(cert_obj: x509.Certificate) -> str | None:
     try:
-        return cert_obj.signature_hash_algorithm.name.upper() if cert_obj.signature_hash_algorithm else None
-    except Exception:
-        return None
-
-def _ocsp_url(cert_obj: x509.Certificate) -> str | None:
-    try:
-        aia = cert_obj.extensions.get_extension_for_oid(
-            ExtensionOID.AUTHORITY_INFORMATION_ACCESS
+        return (
+            cert_obj.signature_hash_algorithm.name.upper()
+            if cert_obj.signature_hash_algorithm
+            else None
         )
-        for access in aia.value:
-            if access.access_method.dotted_string == "1.3.6.1.5.5.7.48.1":
-                return access.access_location.value
     except Exception:
         return None
 
-def _verify_ocsp(cert_obj: x509.Certificate, issuer_cert_bin: bytes | None = None) -> bool | None:
-    ocsp_url = _ocsp_url(cert_obj)
 
-    if not ocsp_url:
-        return None
+@lru_cache(maxsize=1)
+def _verified_context():
+    return ssl.create_default_context()
 
-    try:
-        req = urllib.request.Request(ocsp_url, method="HEAD")
-        req.add_header("User-Agent", "scurl/1.0")
 
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            return resp.status < 400
-
-    except Exception:
-        return None
-
-def get_ssl_cert(structure: dict) -> dict:
+def get_ssl_cert(
+    structure: dict, timeout: float = 3, resolved_ip: str | None = None
+) -> dict:
     host = structure.get("hostname", "")
 
     if not host:
         return {}
 
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_OPTIONAL
+    if structure.get("scheme") != "https":
+        return {"enabled": False}
+    ctx = _verified_context()
 
     try:
-        with socket.create_connection((host, 443), timeout=5) as sock:
+        with socket.create_connection(
+            (resolved_ip or host, structure.get("port") or 443), timeout=timeout
+        ) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
                 cert_bin = ssock.getpeercert(binary_form=True)
                 tls_version = ssock.version()
                 cipher_name, _, _ = ssock.cipher()
-                ocsp_stapled = _check_ocsp_stapling(ssock)
+                ocsp_stapled = None
 
     except ConnectionRefusedError:
         logger.warning("%s error=connection_refused", host)
@@ -107,13 +86,10 @@ def get_ssl_cert(structure: dict) -> dict:
 
     cert_obj = x509.load_der_x509_certificate(cert_bin)
 
-    issuer = parse_issuer(cert.get("issuer", []))
-    subject = parse_issuer(cert.get("subject", []))
+    issuer = {k: v for rdn in cert.get("issuer", []) for k, v in rdn}
+    subject = {k: v for rdn in cert.get("subject", []) for k, v in rdn}
 
-    san = [
-        v for k, v in cert.get("subjectAltName", [])
-        if k == "DNS"
-    ]
+    san = [v for k, v in cert.get("subjectAltName", []) if k == "DNS"]
 
     self_signed = cert.get("issuer") == cert.get("subject")
 
@@ -121,14 +97,8 @@ def get_ssl_cert(structure: dict) -> dict:
     not_after = cert.get("notAfter", "")
 
     try:
-        dt_from = datetime.strptime(
-            not_before,
-            "%b %d %H:%M:%S %Y %Z"
-        )
-        dt_until = datetime.strptime(
-            not_after,
-            "%b %d %H:%M:%S %Y %Z"
-        )
+        dt_from = datetime.strptime(not_before, "%b %d %H:%M:%S %Y %Z")
+        dt_until = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
 
         validity_days = (dt_until - dt_from).days
         valid_from = dt_from.strftime("%Y-%m-%d")
@@ -142,14 +112,14 @@ def get_ssl_cert(structure: dict) -> dict:
     sha1 = hashlib.sha1(cert_bin).hexdigest().upper()
     sha256 = hashlib.sha256(cert_bin).hexdigest().upper()
 
-    ocsp_reachable = _verify_ocsp(cert_obj)
+    ocsp_reachable = None
 
     logger.info(
         "%s tls=%s cipher=%s issuer=%s san=%d valid_days=%s self_signed=%s ocsp_stapling=%s ocsp=%s",
         host,
         tls_version,
         cipher_name,
-        issuer.get("O") or issuer.get("CN", ""),
+        issuer.get("organizationName") or issuer.get("commonName", ""),
         len(san),
         validity_days,
         self_signed,
@@ -159,11 +129,13 @@ def get_ssl_cert(structure: dict) -> dict:
 
     return {
         "enabled": True,
+        "hostname_valid": True,
+        "chain_verified": True,
         "version": tls_version,
         "cipher_suite": cipher_name,
-        "issuer": issuer.get("O") or issuer.get("CN", ""),
+        "issuer": issuer.get("organizationName") or issuer.get("commonName", ""),
         "issuer_detail": issuer,
-        "subject": subject.get("CN", ""),
+        "subject": subject.get("commonName", ""),
         "subject_detail": subject,
         "valid_from": valid_from,
         "valid_until": valid_until,
@@ -177,9 +149,6 @@ def get_ssl_cert(structure: dict) -> dict:
         "public_key_algorithm": _public_key_algorithm(cert_obj),
         "ocsp_stapling": ocsp_stapled,
         "ocsp_reachable": ocsp_reachable,
-        "fingerprints": {
-            "sha1": sha1,
-            "sha256": sha256
-        },
-        "organization": subject.get("O", "")
+        "fingerprints": {"sha1": sha1, "sha256": sha256},
+        "organization": subject.get("organizationName", ""),
     }

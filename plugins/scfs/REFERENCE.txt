@@ -1,0 +1,4 @@
+Architecture reference: https://github.com/JuaanReis/scamlens
+Commit: 0c80ac62e91e192f6d6a61498a0eff0d09f8e700
+Path: plugins/scurl
+Inspected: 2026-10-15

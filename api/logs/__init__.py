@@ -46,7 +46,7 @@ def setup_logging(log_file: Path, bootstrap_time: float = None) -> None:
             f":: {"Mode":<{LABEL_WIDTH}} {setting.environment.upper() if setting.environment == 'production' else 'development'.upper()}\n"
             f":: {"Logging":<{LABEL_WIDTH}} {LEVEL if not _is_production() else 'xxxx'}\n"
             f":: {"Reload":<{LABEL_WIDTH}} {config['server']['reload'] if not _is_production() else 'xxxx'}\n"
-            f":: {"Bootstrap":<{LABEL_WIDTH}} {(bootstrap_time/1000):.2f}s\n"
+            f":: {"Bootstrap":<{LABEL_WIDTH}} {bootstrap_time:.2f}s\n"
             f"{warning_aux_log()}"
             f"\n"
         )

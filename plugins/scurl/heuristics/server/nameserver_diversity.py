@@ -1,16 +1,21 @@
-import tldextract
+from providers.domain.structure import extract
 from plugins.scurl.models.result_base import ResultBase
 from ..registry import register
 
-@register(name="nameserver_diversity", category="server", severity="medium", weight=3.0, tags=["server", "nameserver", "dns"])
+
+@register(
+    name="nameserver_diversity",
+    category="server",
+    severity="medium",
+    weight=3.0,
+    tags=["server", "nameserver", "dns"],
+)
 def nameserver_diversity(structure: dict) -> ResultBase:
     data = structure.get("rdap")
 
     if not data:
         return ResultBase(
-            value=None,
-            normalized=None,
-            details={"error": "RDAP data unavailable"}
+            value=None, normalized=None, details={"error": "RDAP data unavailable"}
         )
 
     nameservers = data.get("nameservers") or []
@@ -19,7 +24,7 @@ def nameserver_diversity(structure: dict) -> ResultBase:
         return ResultBase(
             value=0,
             normalized=1.0,
-            details={"unique_ns_domains": 0, "nameserver_count": 0}
+            details={"unique_ns_domains": 0, "nameserver_count": 0},
         )
 
     domains = set()
@@ -27,7 +32,7 @@ def nameserver_diversity(structure: dict) -> ResultBase:
         name = ns.get("ldhName")
         if not name:
             continue
-        ext = tldextract.extract(name)
+        ext = extract(name)
         if ext.domain and ext.suffix:
             domains.add(f"{ext.domain}.{ext.suffix}")
 
@@ -50,6 +55,6 @@ def nameserver_diversity(structure: dict) -> ResultBase:
         details={
             "unique_ns_domains": unique_domains,
             "nameserver_count": ns_count,
-            "diversity_ratio": round(diversity_ratio, 2)
-        }
+            "diversity_ratio": round(diversity_ratio, 2),
+        },
     )

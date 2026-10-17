@@ -1,40 +1,42 @@
 from plugins.scurl.models.result_base import ResultBase
+from plugins.scurl.parsers.resources import (
+    destination,
+    external,
+    has_password,
+    page_url,
+)
 from ..registry import register
 
-@register(name="form_action_check", category="html", severity="high", weight=3.0, tags=["html", "form", "phishing"])
-def form_action_check(structure: dict) -> ResultBase:
+
+@register(
+    name="form_action_check",
+    category="html",
+    severity="high",
+    weight=4.0,
+    tags=["html", "form", "phishing"],
+)
+def form_action_check(structure):
     tree = structure.get("html_parser")
     if tree is None:
-        return ResultBase(
-            value=0,
-            normalized=None,
-            details={
-                "error": "HTML não disponível"
-            }
-        )
- 
-    original_domain = structure.get("hostname", "")
-    forms = tree.css('form')
-    external_actions = []
- 
-    for form in forms:
-        action = form.attributes.get('action', '')
-        if not action:
+        return ResultBase(0, None, {"error": "HTML não disponível"})
+    findings = []
+    credential = False
+    for form in tree.css("form"):
+        action = form.attributes.get("action") or ""
+        # Missing/empty action submits to the document URL, not an external base.
+        if not action.strip():
             continue
-        parsed = structure.get("netloc", "")
-        if not parsed:
-            continue
-        if parsed != original_domain:
-            external_actions.append(action)
- 
-    has_external_action = len(external_actions) > 0
- 
+        if external(action, structure):
+            findings.append(action)
+            credential = credential or has_password(form)
+    score = 1.0 if credential else 0.2 if findings else 0
     return ResultBase(
-        value=1.0 if has_external_action else 0.0,
-        normalized=1.0 if has_external_action else None,
-        details={
-            "has_external_form_action": has_external_action,
-            "form_count": len(forms),
-            "external_actions": external_actions
-        }
+        len(findings),
+        score,
+        dict(
+            has_external_form_action=bool(findings),
+            credential_form=credential,
+            external_actions=findings[:12],
+            form_count=len(tree.css("form")),
+        ),
     )

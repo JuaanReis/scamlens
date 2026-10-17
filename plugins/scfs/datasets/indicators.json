@@ -1,0 +1,229 @@
+{
+  "injection": [
+    "virtualallocex",
+    "writeprocessmemory",
+    "createremotethread",
+    "ntunmapviewofsection",
+    "queueuserapc"
+  ],
+  "credentials": [
+    "sekurlsa::",
+    "lsass.exe",
+    "logonpasswords",
+    "credential::",
+    "sam\\sam"
+  ],
+  "persistence": [
+    "currentversion\\run",
+    "schtasks /create",
+    "new-scheduledtask",
+    "launchagents/",
+    "/etc/cron",
+    "software\\microsoft\\windows nt\\currentversion\\winlogon"
+  ],
+  "defense_evasion": [
+    "set-mppreference",
+    "disablerealtimemonitoring",
+    "add-mppreference",
+    "amsiutils",
+    "amsiinitfailed",
+    "wevtutil cl",
+    "auditpol /set"
+  ],
+  "destructive": [
+    "vssadmin delete shadows",
+    "wbadmin delete catalog",
+    "bcdedit /set",
+    "recoveryenabled no",
+    "cipher /w:",
+    "remove-item -recurse"
+  ],
+  "network": [
+    "downloadstring",
+    "downloadfile",
+    "invoke-webrequest",
+    "wininet",
+    "winhttp",
+    "urlmon",
+    "curl ",
+    "wget ",
+    "http://",
+    "https://"
+  ],
+  "execution": [
+    "invoke-expression",
+    "iex(",
+    "iex ",
+    "wscript.shell",
+    "shellexecute",
+    "createprocess",
+    "start-process",
+    "exec(",
+    "eval(",
+    "os.system",
+    "subprocess."
+  ],
+  "obfuscation": [
+    "frombase64string",
+    "-encodedcommand",
+    "-enc ",
+    "atob(",
+    "base64.b64decode",
+    "charcode",
+    "[char]"
+  ],
+  "anti_analysis": [
+    "isdebuggerpresent",
+    "checkremotedebuggerpresent",
+    "ntqueryinformationprocess",
+    "vbox",
+    "vmware",
+    "sandboxie"
+  ],
+  "packers": [
+    "upx0",
+    "upx1",
+    "aspack",
+    "mpress",
+    ".vmp",
+    "themida"
+  ],
+  "download": [
+    "downloadstring",
+    "downloadfile",
+    "invoke-webrequest",
+    "curl ",
+    "wget "
+  ],
+  "dynamic_execution": [
+    "invoke-expression",
+    "iex(",
+    "iex ",
+    "exec(",
+    "eval("
+  ],
+  "keyboard": [
+    "getasynckeystate",
+    "getkeyboardstate",
+    "setwindowshookex",
+    "pynput.keyboard",
+    "keyboard.hook"
+  ],
+  "key_context": [
+    "getforegroundwindow",
+    "getwindowtext",
+    "mapvirtualkey",
+    "toascii",
+    "keylogger",
+    "on_press"
+  ],
+  "screen": [
+    "bitblt",
+    "stretchblt",
+    "copyfromscreen",
+    "cgwindowlistcreateimage",
+    "xgetimage",
+    "imagegrab.grab",
+    "screencapture "
+  ],
+  "screen_context": [
+    "getdc",
+    "getdesktopwindow",
+    "getsystemmetrics",
+    "createcompatiblebitmap",
+    "savebitmap",
+    "savescreenshot"
+  ],
+  "clipboard": [
+    "getclipboarddata",
+    "get-clipboard",
+    "pyperclip.paste",
+    "pbpaste"
+  ],
+  "clipboard_context": [
+    "openclipboard",
+    "addclipboardformatlistener",
+    "setclipboardviewer",
+    "clipboardchanged"
+  ],
+  "service": [
+    "createservice",
+    "new-service",
+    "sc.exe create",
+    "sc create "
+  ],
+  "service_context": [
+    "openscmanager",
+    "startservice",
+    "binpath=",
+    "binarypathname",
+    "service_auto_start"
+  ],
+  "tokens": [
+    "duplicatetokenex",
+    "impersonateloggedonuser",
+    "setthreadtoken",
+    "createprocesswithtokenw"
+  ],
+  "privilege_context": [
+    "openprocesstoken",
+    "adjusttokenprivileges",
+    "sedebugprivilege",
+    "setcbprivilege"
+  ],
+  "ransom_note": [
+    "your files have been encrypted",
+    "decrypt your files",
+    "ransom note",
+    "recover your files"
+  ],
+  "encryption": [
+    "cryptencrypt",
+    "bcryptencrypt",
+    "fernet(",
+    "aes.new("
+  ],
+  "file_mutation": [
+    "movefileex",
+    "rename(",
+    "os.rename",
+    "writefile",
+    "write_bytes"
+  ],
+  "upload": [
+    "uploadfile",
+    "uploaddata",
+    "ftp.storbinary",
+    "http.send",
+    "requests.post",
+    "invoke-restmethod"
+  ],
+  "sensitive_data": [
+    "login data",
+    "cookies.sqlite",
+    "wallet.dat",
+    "id_rsa",
+    "\\\\.ssh\\\\",
+    "/etc/shadow"
+  ],
+  "archive": [
+    "compress-archive",
+    "zipfile.zipfile",
+    "7z a ",
+    "tar -cz"
+  ],
+  "lolbins": [
+    "mshta",
+    "regsvr32",
+    "rundll32",
+    "certutil"
+  ],
+  "dynamic_loader": [
+    "getprocaddress",
+    "dlsym"
+  ],
+  "library_loader": [
+    "loadlibrary",
+    "dlopen"
+  ]
+}

@@ -10,5 +10,4 @@ venv/
 *.log
 storage/
 Procfile
-scfs/
 requirements.txt
