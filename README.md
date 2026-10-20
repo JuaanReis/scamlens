@@ -204,7 +204,7 @@ Cotas de análise por dia:
 
 ## Open source
 
-ScamLens é distribuído sob a licença [MIT](LICENSE.md). Uso livre para fins pessoais, acadêmicos e comerciais.
+ScamLens é distribuído sob a licença [MIT](LICENSE). Uso livre para fins pessoais, acadêmicos e comerciais.
 
 ---
 
