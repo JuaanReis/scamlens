@@ -12,19 +12,20 @@ _local = threading.local()
 def get_connection() -> sqlite3.Connection:
     if not hasattr(_local, "conn"):
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = sqlite3.connect(DB_PATH, timeout=config["database"]["timeout"], check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         _local.conn = conn
     return _local.conn
 
 def init_db() -> None:
-    schemas = ["scans.sql", "plans.sql", "users.sql", "quota.sql", "usage.sql", "logging.sql", "revoked_tokens.sql", "admin_audit_log.sql"]
+    schemas = ["scans.sql", "plans.sql", "users.sql", "quota.sql", "usage.sql", "logging.sql", "revoked_tokens.sql", "admin_audit_log.sql", "chat.sql"]
     conn = get_connection()
 
     for filename in schemas:
-        schema = (SCHEMA_DIR / filename).read_text()
+        schema = (SCHEMA_DIR / filename).read_text(encoding="utf-8")
         conn.executescript(schema)
 
     cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]

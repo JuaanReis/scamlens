@@ -3,11 +3,12 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
 from plugins.scurl.models.scan_context import ScanContext
 from plugins.scurl.models.scan_result import ScanResult
+from plugins.scurl import config
 
 logger = logging.getLogger(__name__)
 
-MAX_SCAN_SECONDS = 15
-MAX_WORKERS = 8
+MAX_SCAN_SECONDS = config["scanner"]["max_rule_seconds"]
+MAX_WORKERS = config["scanner"]["max_workers"]
 MIN_WORKERS = 1
 
 def execute_rules(ctx: ScanContext, rules: list, processors: int) -> dict | None:
@@ -21,7 +22,10 @@ def execute_rules(ctx: ScanContext, rules: list, processors: int) -> dict | None
     frozen["safe_browsing"] = copy.deepcopy(ctx.target.safe_browsing)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        future_map = {executor.submit(rule.fn, frozen): rule for rule in rules}
+        future_map = {
+            executor.submit(rule.fn, frozen, **rule.extra.get("parameters", {})): rule
+            for rule in rules
+        }
         timed_out = False
         futures_iter = as_completed(future_map, timeout=MAX_SCAN_SECONDS)
 

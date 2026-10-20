@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from sys import platform
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,19 +20,27 @@ from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
+from api.router.chat import router as chat_router
 from api.router.scurl.url import router as scurl_analyze_router
 from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
+from api.router.scfs.file import router as scfs_analyze_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
+from plugins.scurl.heuristics.registry import get_rules
+from plugins.scfs.heuristics import get_rules as get_scfs_rules
 from scamLens.paths import STATIC, _STORAGE
 settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_rules()
+    unknown = set(config["scfs"]["scanner"]["disabled_rules"]) - {rule.name for rule in get_scfs_rules()}
+    if unknown:
+        raise ValueError(f"Regras desconhecidas no scfs: {sorted(unknown)}")
 
     if LOGS_ENABLED:
-        initialize_logging(START) # Initialize logging with the server startup time
+        initialize_logging(perf_counter() - START)
 
     try:
         init_db()
@@ -69,6 +78,7 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+app.mount("/storage/avatars", StaticFiles(directory=config["paths"]["avatar"]), name="avatars")
 app.mount("/storage", StaticFiles(directory=str(_STORAGE)), name="storage")
 
 app.state.limiter = limiter
@@ -92,11 +102,30 @@ if cors_config["enabled"]:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(chat_router)
 app.include_router(system_router)
 app.include_router(admin_router)
 app.include_router(scurl_analyze_router, prefix="/api/scurl")
 app.include_router(scurl_scans_router, prefix="/api/scurl")
 app.include_router(scurl_qr_router, prefix="/api/scurl/qr")
+app.include_router(scfs_analyze_router, prefix="/api/scfs")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    options = config["validation"]
+    max_length = options["max_detail_length"]
+    errors = []
+    for error in exc.errors()[:options["max_errors"]]:
+        errors.append({
+            "loc": [
+                part[:max_length] if isinstance(part, str) else part
+                for part in error["loc"][:options["max_location_depth"]]
+            ],
+            "msg": error["msg"][:max_length],
+            "type": error["type"][:max_length],
+        })
+
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):

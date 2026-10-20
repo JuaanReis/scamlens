@@ -7,11 +7,12 @@ def parse_args() -> Namespace | None:
     parse.add_argument("--url", "-u", type=str)
     parse.add_argument("target", nargs="?")
     parse.add_argument("--verbose", "-v", action="store_true")
-    parse.add_argument("--threads", "-t", type=int, default=1)
+    scanner_config = config["scanner"]
+    parse.add_argument("--threads", "-t", type=int, default=scanner_config["threads"])
     parse.add_argument("--output", "-o", type=str)
-    parse.add_argument("--timeout", "-T", type=float, default=5)
-    parse.add_argument("-k", type=int, default=5)
-    parse.add_argument("--retries", "-r", type=int, default=3)
+    parse.add_argument("--timeout", "-T", type=float, default=scanner_config["timeout"])
+    parse.add_argument("-k", type=int, default=scanner_config["k"])
+    parse.add_argument("--retries", "-r", type=int, default=scanner_config["retries"])
     parse.add_argument("--disable-color", "-dc", action="store_true")
     parse.add_argument("--cache", "-c", action="store_true", default=False)
     args = parse.parse_args()
@@ -23,5 +24,9 @@ def parse_args() -> Namespace | None:
         set_color(False)
 
     args.url = args.url or args.target
+    if not args.url:
+        parse.error("Informe uma URL ou um arquivo QR")
+    if args.threads < 1 or args.timeout <= 0 or args.k <= 0 or args.retries < 1:
+        parse.error("threads, timeout, k e retries devem ser positivos")
 
     return args

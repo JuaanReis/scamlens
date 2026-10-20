@@ -1,5 +1,5 @@
 from uuid import uuid4
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from plugins.scurl.models.scan_context import ScanContext
 
 def meta_attribute(ctx: ScanContext, processors: int = 1) -> dict:
@@ -11,6 +11,6 @@ def meta_attribute(ctx: ScanContext, processors: int = 1) -> dict:
             processors (int, optional): O número de threads usadas para a varredura. O padrão é 1.
     """
     
-    ctx.meta.timestamp = datetime.now(UTC)
+    ctx.meta.timestamp = datetime.now(timezone.utc)
     ctx.meta.scan_id = uuid4().hex
     ctx.meta.threads = processors

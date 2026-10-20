@@ -1,7 +1,7 @@
 import logging
 import threading
 import httpx
-import tldextract
+from providers.domain.structure import extract
 from .client import rdap_client
 from scamLens import config
 
@@ -54,7 +54,7 @@ def _server_base(url: str) -> str:
     return "/".join(parts[:3])
 
 def resolve_rdap_url(hostname: str) -> tuple[str, str]:
-    extracted = tldextract.extract(hostname)
+    extracted = extract(hostname)
 
     registered = f"{extracted.domain}.{extracted.suffix}"
     tld = extracted.suffix.lower()

@@ -29,4 +29,8 @@ def sigmoid(scores: list, weights: list, k: int = 5) -> float:
             88.08000000000001
     """
 
-    return (1 / (1 + exp(-k * (weighted_average(scores, weights) - 0.5)))) * 100
+    value = k * (weighted_average(scores, weights) - 0.5)
+    if value >= 0:
+        return 100 / (1 + exp(-value))
+    exponential = exp(value)
+    return 100 * exponential / (1 + exponential)

@@ -1,10 +1,7 @@
 from providers.database.connection import get_connection
+from scamLens import config
 
-PLAN_LIMITS = {
-    "standard": 5,
-    "go_pro": 25,
-    "plus_premium": None, 
-}
+PLAN_LIMITS = config["quota"]["plans"]
 
 def get_daily_count(user_id: int, module: str) -> int:
     row = get_connection().execute(
@@ -33,6 +30,6 @@ def is_usage_exceeded(user_id: int, module: str, plan_name: str, is_admin: bool 
     if is_admin:
         return False
     limit = PLAN_LIMITS.get(plan_name)
-    if limit is None:
+    if limit is None or limit < 0:
         return False
     return get_daily_count(user_id, module) >= limit

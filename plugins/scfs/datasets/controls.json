@@ -1,0 +1,130 @@
+[
+  {
+    "id": "hello",
+    "name": "hello.sh",
+    "text": "echo hello world",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "url_without_execution",
+    "name": "readme.py",
+    "text": "url = \"https://example.invalid\"",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "commented_destructive",
+    "name": "notes.ps1",
+    "text": "# vssadmin delete shadows\nWrite-Output hello",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "crypto_library_only",
+    "name": "crypto.py",
+    "text": "CryptEncrypt BCryptEncrypt AES.new(",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "normal_gui",
+    "name": "gui.ps1",
+    "text": "GetClipboardData OpenClipboard BitBlt GetDC",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "service_installer",
+    "name": "install.ps1",
+    "text": "CreateService OpenSCManager StartService",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "recursive_cleanup",
+    "name": "cleanup.ps1",
+    "text": "Remove-Item -Recurse",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "isolated_destructive",
+    "name": "isolated.ps1",
+    "text": "vssadmin delete shadows",
+    "minimum": 25,
+    "maximum": 55,
+    "split": "validation"
+  },
+  {
+    "id": "multi_signal",
+    "name": "fixture.ps1",
+    "text": "VirtualAllocEx WriteProcessMemory CreateRemoteThread\nlsass.exe sekurlsa:: logonpasswords\nvssadmin delete shadows wbadmin delete catalog",
+    "minimum": 85,
+    "maximum": 100,
+    "split": "validation"
+  },
+  {
+    "id": "collection_exfiltration",
+    "name": "fixture.ps1",
+    "text": "GetAsyncKeyState GetForegroundWindow\nlsass.exe sekurlsa::\nUploadFile wallet.dat Compress-Archive",
+    "minimum": 70,
+    "maximum": 100,
+    "split": "validation"
+  },
+  {
+    "id": "ransomware_artifacts",
+    "name": "fixture.ps1",
+    "text": "your files have been encrypted CryptEncrypt WriteFile\nSet-MpPreference DisableRealtimeMonitoring\nschtasks /create /etc/cron",
+    "minimum": 70,
+    "maximum": 100,
+    "split": "validation"
+  },
+  {
+    "id": "download_only",
+    "name": "update.ps1",
+    "text": "Invoke-WebRequest https://example.invalid/package.zip",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "validation"
+  },
+  {
+    "id": "commented_commands_js",
+    "name": "notes.js",
+    "text": "// vssadmin delete shadows\nconsole.log(\"hello\")",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "holdout"
+  },
+  {
+    "id": "clipboard_utility",
+    "name": "clip.py",
+    "text": "pyperclip.paste OpenClipboard",
+    "minimum": 0,
+    "maximum": 25,
+    "split": "holdout"
+  },
+  {
+    "id": "isolated_backup_delete",
+    "name": "isolated.cmd",
+    "text": "wbadmin delete catalog",
+    "minimum": 25,
+    "maximum": 55,
+    "split": "holdout"
+  },
+  {
+    "id": "high_signal_variant",
+    "name": "fixture.ps1",
+    "text": "VirtualAllocEx WriteProcessMemory QueueUserAPC\ncredential:: logonpasswords\nwbadmin delete catalog vssadmin delete shadows",
+    "minimum": 85,
+    "maximum": 100,
+    "split": "holdout"
+  }
+]

@@ -8,7 +8,9 @@ from .database import log_request
 logger = getLogger("api.request")
 
 LOGGED_PREFIXES = (
+    "/api/chat",
     "/api/scurl",
+    "/api/scfs",
     "/api/qr",
 )
 

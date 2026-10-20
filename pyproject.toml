@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scamlens"
-version = "2.0.5"
+version = "3.2.7"
 requires-python = ">=3.10"
 
 dependencies = [
@@ -25,6 +25,7 @@ dependencies = [
     "tldextract==5.3.1",
     "tomli==2.4.1",
     "uvicorn==0.47.0",
+    "websockets>=13.0",
     "zxing_cpp==3.0.0",
     "pydantic[email]",
     "python-multipart"
@@ -46,5 +47,6 @@ include = [
 [tool.setuptools.package-data]
 "scamLens" = ["config.toml", "logo_log.txt"]
 "plugins.scurl" = ["datasets/wordlists/*.txt"]
+"plugins.scfs" = ["datasets/*.json"]
 "providers.database" = ["schema/*.sql"]
 api = ["static/*"]

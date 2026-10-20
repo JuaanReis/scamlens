@@ -1,5 +1,5 @@
-from urllib.parse import urlparse
 from plugins.scurl.models.result_base import ResultBase
+from plugins.scurl.parsers.resources import external
 from ..registry import register
 
 @register(name="image_src_check", category="html", severity="low", weight=1.5, tags=["html", "image"])
@@ -12,7 +12,6 @@ def image_src_check(structure: dict) -> ResultBase:
             details={"error": "HTML não disponível"}
         )
  
-    original_domain = structure.get("hostname", "")
     images = tree.css("img[src]")
     external_images = []
  
@@ -20,8 +19,7 @@ def image_src_check(structure: dict) -> ResultBase:
         src = img.attributes.get("src", "")
         if not src:
             continue
-        parsed = urlparse(src)
-        if parsed.netloc and parsed.netloc != original_domain:
+        if external(src, structure):
             external_images.append(src)
  
     total = len(images)

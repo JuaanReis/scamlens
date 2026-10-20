@@ -1,6 +1,6 @@
 import asyncio
 from functools import partial
-from fastapi import APIRouter, Request, UploadFile, File
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from time import perf_counter
 from api.router.scurl.schema.map_error import ErrorResponse
@@ -9,6 +9,7 @@ from providers.database.repository import save_scan
 from scamLens import config
 from providers.database.usage import is_usage_exceeded, increment_usage, PLAN_LIMITS
 from providers.database.quota import is_quota_exceeded, increment_anonymous_count
+from api.router.scurl.runtime import scan_semaphore as _semaphore
 from api.router.scurl.schema.map_result import (
     AnalyzeResponse,
     ScanResponse,
@@ -16,9 +17,6 @@ from api.router.scurl.schema.map_result import (
 )
 
 router = APIRouter()
-
-MAX_CONCURRENT_SCANS = config["rate_limit"]["max_concurrent_scans"]
-_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 @router.post(
     "/analyze/qr",
@@ -42,7 +40,7 @@ async def analyze_qr(request: Request, file: UploadFile = File(...)):
         user = get_current_user(request)
         user_id = user["id"]
         is_admin = user.get("is_admin", False)
-    except:
+    except HTTPException:
         pass
 
     if user_id is None:
@@ -65,7 +63,10 @@ async def analyze_qr(request: Request, file: UploadFile = File(...)):
                 }
             )
 
-    data = await file.read()
+    max_size = config["uploads"]["qr_max_bytes"]
+    data = await file.read(max_size + 1)
+    if len(data) > max_size:
+        return JSONResponse(status_code=413, content={"error": f"Arquivo excede o limite de {max_size} bytes"})
 
     if _semaphore.locked():
         return JSONResponse(status_code=503, content={"error": "servidor ocupado, tente novamente"})

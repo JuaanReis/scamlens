@@ -253,3 +253,64 @@ Flags reais (`plugins/scurl/cli/args.py`):
 **Cuidado com `-o` para arquivo:** `save_output()` monta o JSON como `{"url": target, **scan}` — ou seja, o dicionário completo do `target` (identidade, rede, TLS, DNS, HTTP, conteúdo) fica salvo sob a chave `"url"`, misturado com os campos do `scan` no nível raiz. Isso é diferente do formato que a API HTTP devolve (`{"scan": {...}, "target": {...}}`), então não assuma que o JSON salvo pelo CLI tem o mesmo shape do `AnalyzeResponse` da API — hoje eles divergem.
 
 Não há CLI publicado para `scfs` ou `scqr` isoladamente (nenhum entry point em `pyproject.toml` além de `scurl` e `scamlens-api`); só existem como módulos internos.
+
+## Análise de arquivos — scfs
+
+A rota fica em `api/router/scfs/file.py`, com esquemas de entrada/saída na pasta `schema`, seguindo a organização de `scurl`.
+
+```powershell
+curl.exe -X POST http://localhost:5300/api/scfs/analyze/file -F "file=@C:/caminho/amostra.exe"
+```
+
+O campo multipart é `file`. O motor faz análise estática de PE, ELF, Mach-O e scripts suportados, sem executar o arquivo. A resposta segue o envelope `{scan, target}`; `scan.status` pode ser `ok`, `partial` ou `inconclusive`. Resultados inconclusivos mantêm score nulo.
+
+Os limites vêm de `[scfs.scanner]` em `scamLens/config.toml`: `max_file_size_bytes` (padrão 50000000), `k`, `max_strings`, `score_model` e `disabled_rules`. A configuração é carregada e validada pelo `scamLens/__init__.py`; não há um arquivo `configuration.py` separado.
+
+A rota usa a mesma autenticação opcional e as mesmas cotas por plano de `scurl`, com uso diário registrado no módulo `scfs`. A cota anônima por IP é compartilhada com os outros scans. Erros de upload/análise não consomem a cota.
+
+Respostas: `400` para arquivo vazio/corrompido, `401` para cota anônima esgotada, `413` para tamanho excedido, `415` para formato não suportado, `422` para ausência de arquivo, `429` para cota diária/rate limit e `503` para scanner ocupado. Não é criado histórico de scans de arquivo nesta rota; o arquivo enviado não é persistido pela aplicação.
+
+
+## Chat
+
+A integração da branch `chat` expõe uma sala comum aos usuários autenticados. HTTP e WebSocket aceitam o cookie `access_token` ou o header `Authorization: Bearer <access_token>`. Tokens ausentes, inválidos, revogados ou de usuários inativos não autenticam a conexão; o WebSocket encerra com código 1008 quando a autenticação falha.
+
+### Enviar uma mensagem
+
+`POST /api/chat/messages`, com JSON:
+
+```json
+{
+  "content": "Olá!",
+  "sent_at": "2026-10-20T12:00:00-03:00"
+}
+```
+
+`content` e `sent_at` são obrigatórios. O conteúdo é aparado e mensagens vazias ou acima do limite são rejeitadas com 422. O horário é normalizado para UTC; horários sem fuso são interpretados como UTC. A resposta 201 contém `id`, `name`, `avatar_url`, `content` e `sent_at`. Nome e avatar vêm do usuário autenticado.
+
+Erros de validação retornam somente `loc`, `msg` e `type` em `detail`, sem copiar a entrada recusada nem o contexto do validador. Isso vale para toda a API. A seção `[validation]` limita a quantidade de erros (`max_errors = 10`), o comprimento de cada texto (`max_detail_length = 200`) e a profundidade da localização (`max_location_depth = 8`), mantendo a resposta pequena mesmo com entradas grandes. Esses limites controlam a resposta de erro; não limitam o tamanho do corpo HTTP recebido.
+
+### Histórico
+
+`GET /api/chat/messages?limit=50&before_id=123` retorna uma lista, da mensagem mais antiga para a mais nova dentro da página. `before_id` é opcional: use o ID da primeira mensagem da página recebida para buscar a página anterior. O cursor considera o horário e o ID da mensagem, inclusive quando mensagens foram enviadas com horários fora de ordem. O parâmetro `limit` deve estar entre 1 e o limite configurado; `before_id`, quando informado, deve ser positivo.
+
+### Tempo real
+
+Conecte a `ws://localhost:5300/api/chat/ws` em HTTP local ou use `wss://` quando a API estiver em HTTPS. Cookies Secure exigem conexão segura. A publicação é feita por POST; o WebSocket recebe eventos JSON com `type: "message"` e os mesmos campos da resposta de envio.
+
+O broadcast ocorre após a gravação no banco e alcança os clientes conectados ao mesmo processo. Não há sincronização de eventos entre múltiplos workers nem salas privadas nesta integração. O histórico continua persistido em SQLite.
+
+### Banco e configuração
+
+O `init_db()` carrega `providers/database/schema/chat.sql` e cria `chat_messages` e seus índices sem apagar os dados existentes. A tabela armazena o usuário remetente, conteúdo, horário do cliente (`sent_at`) e horário de gravação (`created_at`). As conexões habilitam foreign keys; a relação com usuários declara `ON DELETE CASCADE`.
+
+Em `scamLens/config.toml`:
+
+```toml
+[chat]
+max_message_length = 2000
+default_page_size = 50
+max_page_size = 100
+```
+
+Reinicie a API após alterar a configuração ou integrar as novas rotas. A dependência `websockets` faz parte da instalação de runtime para que o Uvicorn disponibilize o transporte WebSocket.

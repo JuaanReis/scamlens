@@ -1,6 +1,6 @@
 import asyncio
 from functools import partial
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from time import perf_counter
 from api.router.scurl.schema.map_error import ErrorResponse  
@@ -9,6 +9,7 @@ from scamLens import config
 from providers.database.repository import save_scan
 from providers.database.usage import is_usage_exceeded, increment_usage, PLAN_LIMITS
 from providers.database.quota import is_quota_exceeded, increment_anonymous_count
+from api.router.scurl.runtime import scan_semaphore as _semaphore
 from api.router.scurl.schema.map_result import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -17,9 +18,6 @@ from api.router.scurl.schema.map_result import (
 )
 
 router = APIRouter()
-
-MAX_CONCURRENT_SCANS = config["rate_limit"]["max_concurrent_scans"]
-_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 @router.post(
     "/analyze/url",
@@ -37,10 +35,11 @@ async def analyze_url(request: Request, body: AnalyzeRequest):
     ip = request.client.host
     user = None
 
-    if len(str(body.url)) > 100:
+    max_length = config["scurl"]["security"]["max_url_length"]
+    if len(str(body.url)) > max_length:
         return JSONResponse(
             status_code=422,
-            content={"error": "URL excede o limite de 100 caracteres"}
+            content={"error": f"URL excede o limite de {max_length} caracteres"}
         )
 
     try:
@@ -48,7 +47,7 @@ async def analyze_url(request: Request, body: AnalyzeRequest):
         user = get_current_user(request)
         user_id = user["id"]
         is_admin = user.get("is_admin", False)
-    except:
+    except HTTPException:
         pass
 
     if user_id is None:

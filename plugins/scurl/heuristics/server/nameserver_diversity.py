@@ -1,4 +1,4 @@
-import tldextract
+from providers.domain.structure import extract
 from plugins.scurl.models.result_base import ResultBase
 from ..registry import register
 
@@ -27,7 +27,7 @@ def nameserver_diversity(structure: dict) -> ResultBase:
         name = ns.get("ldhName")
         if not name:
             continue
-        ext = tldextract.extract(name)
+        ext = extract(name)
         if ext.domain and ext.suffix:
             domains.add(f"{ext.domain}.{ext.suffix}")
 

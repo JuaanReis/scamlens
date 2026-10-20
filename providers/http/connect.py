@@ -13,10 +13,15 @@ from .retry import (
 )
 from .result import build_result
 from .url_sanitizer_log import sanitize_url
+from scamLens import config
 
 logger = logging.getLogger("scanner.request")
 
-def request(method: str, url: str, *, data: dict | None = None, retries: int = 3, delay: float = 0.6, timeout: float = 5, allow_redirects: bool = False):
+def request(method: str, url: str, *, data: dict | None = None, retries: int | None = None, delay: float | None = None, timeout: float | None = None, allow_redirects: bool = False):
+    http_config = config["http"]
+    retries = http_config["retries"] if retries is None else retries
+    delay = http_config["retry_delay"] if delay is None else delay
+    timeout = http_config["timeout"] if timeout is None else timeout
     for attempt in range(retries):
         try:
             response = scan_client.request(
@@ -36,6 +41,9 @@ def request(method: str, url: str, *, data: dict | None = None, retries: int = 3
                 retries,
             )
 
+            if should_retry(response.status_code) and attempt < retries - 1:
+                sleep(get_retry_after(dict(response.headers), default=delay * (2 ** attempt)))
+                continue
             return build_result(response)
 
         except HTTPStatusError as e:

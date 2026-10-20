@@ -1,13 +1,6 @@
-from urllib.parse import urlparse
 from plugins.scurl.models.result_base import ResultBase
-from plugins.scurl.parsers.normalize_domain import normalize_domain
-import tldextract
+from plugins.scurl.parsers.resources import external, destination
 from ..registry import register
-
-def same_owner(domain_a: str, domain_b: str) -> bool:
-    a = tldextract.extract(domain_a)
-    b = tldextract.extract(domain_b)
-    return a.domain == b.domain and a.suffix == b.suffix
 
 @register(name="favicon_check", category="html", severity="low", weight=2.0, tags=["html", "favicon"])
 def favicon_check(structure: dict) -> ResultBase:
@@ -35,8 +28,8 @@ def favicon_check(structure: dict) -> ResultBase:
         )
  
     href = favicon.attributes.get("href", "")
-    parsed = urlparse(href)
-    is_external = not same_owner(normalize_domain(parsed.netloc), normalize_domain(original_domain))
+    parsed = destination(href, structure)
+    is_external = external(href, structure)
  
     return ResultBase(
         value=1.0 if is_external else 0.0,
@@ -44,7 +37,7 @@ def favicon_check(structure: dict) -> ResultBase:
         details={
             "favicon_found": True,
             "favicon_url": href,
-            "favicon_domain": parsed.netloc or original_domain,
+            "favicon_domain": parsed.hostname if parsed else original_domain,
             "is_external_favicon": is_external
         }
     )

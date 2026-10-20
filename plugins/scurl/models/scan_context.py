@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from hashlib import sha256
 from time import time
 from urllib.parse import ParseResult, urlparse, urlunparse
@@ -24,7 +24,7 @@ class ScanMeta:
     url_hash: str = ""
     threads: int = 1
     start: float = field(default_factory=time)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class ScanContext:
@@ -42,14 +42,5 @@ class ScanContext:
     def __post_init__(self):
         if self.target.url and not self.meta.url_hash:
             parsed = urlparse(self.target.url)
-            hostname = parsed.hostname or ""
-            if hostname.startswith("www."):
-                hostname = hostname[4:]
-            netloc = hostname
-            if parsed.port:
-                netloc = f"{hostname}:{parsed.port}"
-            normalized = urlunparse(parsed._replace(
-                netloc=netloc,
-                path=parsed.path.rstrip("/") or "/"
-            ))
+            normalized = urlunparse(parsed)
             self.meta.url_hash = sha256(normalized.encode()).hexdigest()

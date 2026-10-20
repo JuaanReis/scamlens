@@ -10,6 +10,8 @@ def save_output(file: str, data: dict, target: str | None = None):
             }
 
     if file == "-":
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
         json.dump(data, sys.stdout, indent=2, ensure_ascii=False)
         print()
         return

@@ -8,7 +8,7 @@ from providers.safebrowsing.client import fetch_safe_browsing
 from providers.ssl.info_ssl import get_ssl_cert
 from providers.dns.info_dns import get_dns_info
 from plugins.scurl.engine.pipeline.validate_url import resolve_and_validate_host
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from plugins.scurl import config
 
 MAX_REDIRECTS = config["scanner"]["max_redirects"]
@@ -30,7 +30,12 @@ def _fetch_with_redirect_guard(url: str, timeout: float, retries: int) -> object
     current_url = url
     hops = 0
 
-    while hops < MAX_REDIRECTS:
+    chain = []
+    seen = set()
+    while hops <= MAX_REDIRECTS:
+        if current_url in seen or not _is_safe_redirect(current_url):
+            return None
+        seen.add(current_url)
         response = request(
             method="GET",
             url=current_url,
@@ -42,19 +47,19 @@ def _fetch_with_redirect_guard(url: str, timeout: float, retries: int) -> object
         if response is None:
             return None
 
+        chain.append({"url": current_url, "status": response.status, "location": response.headers.get("location")})
         if response.status not in (301, 302, 303, 307, 308):
+            response.redirects = hops
+            response.redirect_chain = chain
             return response
 
         location = response.headers.get("location", "").strip()
         if not location:
             return response
 
-        if location.startswith("/"):
-            parsed_current = urlparse(current_url)
-            location = f"{parsed_current.scheme}://{parsed_current.netloc}{location}"
+        location = urljoin(current_url, location)
 
         if not _is_safe_redirect(location):
-            logger_msg = f"Redirect bloqueado: {current_url} -> {location}"
             return None
 
         current_url = location
@@ -75,6 +80,10 @@ def collect_target_data(ctx: ScanContext, timeout: float = 5, retries: int = 3) 
 
     ctx.target.response = response
     ctx.target.size_kb = round(response.size / 1024, 2) if response else 0
+
+    if response:
+        ctx.target.structure = get_structure(response.url)
+        structure = ctx.target.structure
 
     if response and response.body:
         content_type = response.headers.get("content-type", "")

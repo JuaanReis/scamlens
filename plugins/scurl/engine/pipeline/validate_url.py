@@ -34,7 +34,7 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         return _is_blocked_ip(ip.ipv4_mapped)
 
-    if ip.is_private or ip.is_loopback or ip.is_link_local:
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
         return True
 
     return any(ip in r for r in BLOCKED_RANGES)
@@ -83,10 +83,14 @@ def _url_validator(url: str) -> tuple[dict | None, ipaddress.IPv4Address | ipadd
     if not url:
         return _error_response(None, "missing_url", "URL não informada"), None
 
-    if len(url) > 2048:
+    if len(url) > config["security"]["max_url_length"]:
         return _error_response(url, "url_too_long", "URL muito longa"), None
 
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+    except ValueError:
+        return _error_response(url, "invalid_host", "Host ou porta inválidos"), None
 
     if parsed.scheme not in ("http", "https"):
         return _error_response(url, "missing_protocol", "URL inválida"), None

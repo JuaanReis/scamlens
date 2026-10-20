@@ -60,7 +60,8 @@ def at_risk(structure: dict, threshold: int = 1) -> ResultBase:
             print(result.details)  # Output: {'at_count': 1}
     """
     url = structure.get("url", "")
-    at_count = url.count("@")
+    from urllib.parse import urlparse
+    at_count = urlparse(url).netloc.count("@")
     normalized = normalize_counter(at_count, threshold)
 
     return ResultBase( 

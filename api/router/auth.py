@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
 cookie_config = config["cookies"]
+auth_config = config["auth"]
 secure = cookie_config["secure"]
 samesite = cookie_config["samesite"]
 httponly = cookie_config["httponly"]
@@ -29,10 +30,10 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TTL = timedelta(minutes=ttl_minutes)
 REFRESH_TTL = timedelta(days=ttl_days)
-_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(rounds=auth_config["bcrypt_rounds"])).decode()
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=auth_config["bcrypt_rounds"])).decode()
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
@@ -50,7 +51,7 @@ def _make_token(user_id: int, ttl: timedelta, token_type: str, remember: bool = 
     return encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def _set_cookies(response: Response, user_id: int, remember: bool) -> None:
-    refresh_ttl = REFRESH_TTL if remember else timedelta(days=1)
+    refresh_ttl = REFRESH_TTL if remember else timedelta(days=cookie_config["session_ttl_days"])
 
     response.set_cookie(
         key="access_token",
@@ -68,15 +69,18 @@ def _set_cookies(response: Response, user_id: int, remember: bool) -> None:
 
 def decode_token(token: str, expected_type: str) -> dict:
     try:
-        payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={
+            "require": ["sub", "exp", "iat", "type", "jti"]
+        })
 
         if payload.get("type") != expected_type:
             raise HTTPException(status_code=401, detail="Token inválido")
 
-        if expected_type == "refresh":
-            jti = payload.get("jti")
-            if jti and is_token_revoked(jti):
-                raise HTTPException(status_code=401, detail="Token revogado")
+        if not payload["sub"].isdigit() or int(payload["sub"]) < 1:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        if is_token_revoked(payload["jti"]):
+            raise HTTPException(status_code=401, detail="Token revogado")
 
         return payload
 
@@ -129,6 +133,9 @@ def login(body: LoginBody, response: Response):
 @router.post("/logout")
 def logout(request: Request, response: Response):
     _revoke_if_valid(request.cookies.get("access_token"), "access")
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        _revoke_if_valid(authorization[7:], "access")
     _revoke_if_valid(request.cookies.get("refresh_token"), "refresh")
     response.delete_cookie("access_token", **COOKIE_KWARGS)
     response.delete_cookie("refresh_token", **COOKIE_KWARGS)

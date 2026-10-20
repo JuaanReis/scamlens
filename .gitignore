@@ -10,5 +10,7 @@ venv/
 *.log
 storage/
 Procfile
-scfs/
 requirements.txt
+.pytest_cache/
+build/
+scimg/

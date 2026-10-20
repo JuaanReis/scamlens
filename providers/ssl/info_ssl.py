@@ -8,18 +8,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID
-import urllib.request
+from scamLens import config
 
 logger = logging.getLogger("scanner.ssl")
 
 def _check_ocsp_stapling(ssock: ssl.SSLSocket) -> bool | None:
-    try:
-        if ssock.version() == "TLSv1.3":
-            return None
-        response = ssock.get_channel_binding("tls-unique")
-        return response is not None
-    except Exception:
-        return None
+    # Channel binding não comprova OCSP stapling; a stdlib não expõe a resposta.
+    return None
 
 def _public_key_algorithm(cert_obj: x509.Certificate) -> str | None:
     pub = cert_obj.public_key()
@@ -51,33 +46,21 @@ def _ocsp_url(cert_obj: x509.Certificate) -> str | None:
         return None
 
 def _verify_ocsp(cert_obj: x509.Certificate, issuer_cert_bin: bytes | None = None) -> bool | None:
-    ocsp_url = _ocsp_url(cert_obj)
-
-    if not ocsp_url:
-        return None
-
-    try:
-        req = urllib.request.Request(ocsp_url, method="HEAD")
-        req.add_header("User-Agent", "scurl/1.0")
-
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            return resp.status < 400
-
-    except Exception:
-        return None
+    # Uma requisição HEAD não valida revogação. Não consultar URLs do certificado.
+    return None
 
 def get_ssl_cert(structure: dict) -> dict:
     host = structure.get("hostname", "")
 
     if not host:
         return {}
+    if structure.get("scheme") != "https":
+        return {"enabled": False}
 
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_OPTIONAL
 
     try:
-        with socket.create_connection((host, 443), timeout=5) as sock:
+        with socket.create_connection((host, structure.get("port") or 443), timeout=config["tls"]["timeout"]) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
                 cert_bin = ssock.getpeercert(binary_form=True)

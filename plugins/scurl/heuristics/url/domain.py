@@ -26,9 +26,9 @@ def ip_in_url(structure: dict) -> ResultBase:
             print(result.risk)  # Output: True
     """
 
-    url = structure.get("url", "")
-    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-    matches = findall(ip_pattern, url)
+    from urllib.parse import urlparse
+    hostname = structure.get("hostname") or urlparse(structure.get("url", "")).hostname or ""
+    matches = [hostname] if hostname else []
 
     for ip in matches:
         try:
@@ -46,7 +46,8 @@ def ip_in_url(structure: dict) -> ResultBase:
         except ValueError:
             continue
 
-    normalized = minmax(len(matches), 0, 5)
+    matches = []
+    normalized = 0
     
     return ResultBase(
         value = len(matches),

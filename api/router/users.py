@@ -10,7 +10,7 @@ from scamLens import config
 router = APIRouter(prefix="/api/user", tags=["users"])
 
 AVATARS_DIR = Path(config["paths"]["avatar"])
-MAX_SIZE_BYTES = 2 * 1024 * 1024 
+MAX_SIZE_BYTES = config["uploads"]["avatar_max_bytes"]
 
 ALLOWED_SIGNATURES: list[tuple[bytes, str, str]] = [
     (b"\xff\xd8\xff", "jpg",  "image/jpeg"),
@@ -50,7 +50,7 @@ def me(user: dict = Depends(get_current_user)):
 async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     contents = await file.read(MAX_SIZE_BYTES + 1)
     if len(contents) > MAX_SIZE_BYTES:
-        raise HTTPException(status_code=413, detail="File too large. Maximum 2MB.")
+        raise HTTPException(status_code=413, detail=f"File too large. Maximum {MAX_SIZE_BYTES} bytes.")
 
     detected = _detect(contents)
     if detected is None:
@@ -73,7 +73,7 @@ async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_c
 
     path.write_bytes(contents)
 
-    avatar_url = f"{AVATARS_DIR}/{filename}"
+    avatar_url = f"/storage/avatars/{filename}"
     update_avatar(user["id"], avatar_url)
 
     return {"avatar_url": avatar_url}

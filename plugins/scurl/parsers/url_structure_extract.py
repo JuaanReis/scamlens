@@ -1,10 +1,6 @@
 from urllib.parse import parse_qs, urlparse
-from tldextract import extract
-from re import compile
-
-_IP_PATTERN = compile(
-    r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$"
-)
+from providers.domain.structure import extract
+from ipaddress import ip_address
 
 _SUSPICIOUS_QUERY_KEYWORDS = frozenset([
     "cmd", "exec", "script", "redirect", "login", "token",
@@ -17,10 +13,11 @@ _RISKY_TLDS = frozenset([
 ])
 
 def _is_ip(hostname: str) -> bool:
-    m = _IP_PATTERN.match(hostname)
-    if not m:
+    try:
+        ip_address(hostname)
+        return True
+    except ValueError:
         return False
-    return all(0 <= int(m.group(i)) <= 255 for i in range(1, 5))
 
 def extract_structure(url: str):
     """
@@ -104,7 +101,7 @@ def extract_structure(url: str):
     if not ext.domain:
         return None
 
-    registered_domain = ext.registered_domain
+    registered_domain = ext.top_domain_under_public_suffix or hostname
     tld = ext.suffix.lower() if ext.suffix else ""
 
     raw_subs = [s for s in ext.subdomain.split(".") if s] if ext.subdomain else []
@@ -142,6 +139,8 @@ def extract_structure(url: str):
         "url":               original_url,
         "scheme":            parsed.scheme,
         "hostname":          hostname,
+        "domain":            ext.domain,
+        "netloc":            parsed.netloc,
         "registered_domain": registered_domain,
         "subdomain":         subs_no_www,
         "tld":               tld,

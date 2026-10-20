@@ -8,6 +8,11 @@ reload = false
 enabled = true
 level = "INFO"
 
+[validation]
+max_errors = 10
+max_detail_length = 200
+max_location_depth = 8
+
 [logging]
 trust_proxy = false
 
@@ -31,6 +36,7 @@ samesite = "lax"
 httponly = true
 ttl_minutes = 30 # access token
 ttl_days = 30 # refresh token
+session_ttl_days = 1
 
 [http]
 retries = 3
@@ -44,6 +50,8 @@ read = 3.0
 max_keepalive_connections = 20
 max_connections = 50
 rotate_user_agent = true
+retry_delay = 0.6
+max_retry_delay = 5.0
 
 [rdap]
 http2 = false
@@ -73,6 +81,10 @@ cache = true
 k = 5 
 max_redirects = 10
 retries = 3
+score_model = "legacy"
+cache_ttl_seconds = 300
+max_rule_seconds = 15
+max_workers = 8
 
 [scurl.output]
 colors = true
@@ -80,11 +92,317 @@ colors = true
 [scurl.security]
 allow_private_ips = false
 allow_localhost = false
+max_url_length = 2048
 
 [scfs]
 [scfs.scanner]
 max_file_size_bytes = 50000000
+k = 5.0
+max_strings = 30000
+score_model = "grouped"
+disabled_rules = []
 
 [scimg]
 [scimg.scanner]
 max_file_size_bytes = 30000000
+[domain]
+cache_size = 4096
+
+[database]
+timeout = 10.0
+
+[chat]
+max_message_length = 2000
+default_page_size = 50
+max_page_size = 100
+
+[auth]
+# bcrypt admite no máximo 72 bytes.
+max_password_bytes = 72
+max_name_length = 128
+bcrypt_rounds = 12
+
+[uploads]
+avatar_max_bytes = 2097152
+qr_max_bytes = 10485760
+qr_max_pixels = 20000000
+
+[quota]
+anonymous_daily_limit = 3
+
+[quota.plans]
+standard = 5
+go_pro = 25
+plus_premium = -1 # ilimitado
+
+[tls]
+timeout = 5.0
+
+[scurl.scoring]
+classification = [
+    { below = 10, verdict = "safe", risk = "very low" },
+    { below = 25, verdict = "safe", risk = "low" },
+    { below = 40, verdict = "suspicious", risk = "moderate" },
+    { below = 55, verdict = "suspicious", risk = "elevated" },
+    { below = 70, verdict = "dangerous", risk = "high" },
+    { below = 85, verdict = "dangerous", risk = "very high" },
+    { below = 101, verdict = "malicious", risk = "critical" },
+]
+
+[scurl.scoring.groups]
+credential_cleartext = "transport"
+credential_exfiltration = "credentials"
+form_action_check = "credentials"
+brand_subdomain = "deception"
+unicode_mixed_script = "deception"
+at_risk = "deception"
+misleading_link = "deception"
+typosquatting = "deception"
+xss_risk = "injection"
+domain_age = "domain"
+rdap_metadata_incompleteness = "domain"
+nameserver_diversity = "domain"
+ssl_score = "transport"
+dns_score = "transport"
+redirect_check = "redirect"
+query_contains_url = "redirect"
+external_script = "resources"
+script_integrity_absent = "resources"
+image_src_check = "resources"
+favicon_check = "resources"
+password_input_check = "context"
+missing_form_tag = "context"
+hidden_fields_check = "context"
+client_hints_collection = "context"
+inline_data_uri = "encoding"
+mixed_encoding = "encoding"
+fragment_risk = "encoding"
+equal_risk = "encoding"
+ip_in_url = "host"
+random_domain_risk = "host"
+random_subdomain_risk = "host"
+hyphen_risk = "host"
+num_ratio_risk = "host"
+subdomain_count = "host"
+random_path_risk = "path"
+length_path = "path"
+length_domain = "host"
+path_depth_risk = "path"
+query_no_value = "path"
+shorteners_keyword_risk = "redirect"
+safe_browsing = "reputation"
+cleartext_transport = "transport"
+
+[scurl.scoring.caps]
+domain_age = 0.25
+rdap_metadata_incompleteness = 0.05
+nameserver_diversity = 0.05
+external_script = 0.08
+script_integrity_absent = 0.05
+image_src_check = 0.05
+favicon_check = 0.05
+password_input_check = 0
+missing_form_tag = 0.1
+hidden_fields_check = 0.05
+client_hints_collection = 0.03
+inline_data_uri = 0.08
+mixed_encoding = 0.4
+fragment_risk = 0.1
+equal_risk = 0.1
+random_domain_risk = 0.6
+random_subdomain_risk = 0.6
+hyphen_risk = 0.3
+num_ratio_risk = 0.3
+subdomain_count = 0.25
+random_path_risk = 0.25
+length_path = 0.2
+length_domain = 0.2
+path_depth_risk = 0.15
+query_no_value = 0.1
+shorteners_keyword_risk = 0.2
+query_contains_url = 0.15
+redirect_check = 0.3
+dns_score = 0.05
+ssl_score = 0.6
+ip_in_url = 0.7
+typosquatting = 0.6
+
+[scurl.rules.client_hints_collection]
+weight = 1.0
+
+[scurl.rules.credential_cleartext]
+weight = 4.0
+
+[scurl.rules.credential_exfiltration]
+weight = 4.0
+[scurl.rules.credential_exfiltration.parameters]
+max_findings = 12
+max_url_length = 300
+
+[scurl.rules.misleading_link]
+weight = 2.0
+[scurl.rules.misleading_link.parameters]
+normalized = 0.7
+max_findings = 12
+max_text_length = 200
+
+[scurl.rules.external_script]
+weight = 3.0
+
+[scurl.rules.favicon_check]
+weight = 2.0
+
+[scurl.rules.form_action_check]
+weight = 3.0
+
+[scurl.rules.hidden_fields_check]
+weight = 2.0
+
+[scurl.rules.image_src_check]
+weight = 1.5
+
+[scurl.rules.inline_data_uri]
+weight = 1.5
+
+[scurl.rules.missing_form_tag]
+weight = 2.0
+
+[scurl.rules.password_input_check]
+weight = 3.0
+
+[scurl.rules.redirect_check]
+weight = 3.0
+
+[scurl.rules.script_integrity_absent]
+weight = 2.0
+
+[scurl.rules.dns_score]
+weight = 3.5
+
+[scurl.rules.domain_age]
+weight = 4.0
+
+[scurl.rules.nameserver_diversity]
+weight = 3.0
+
+[scurl.rules.rdap_metadata_incompleteness]
+weight = 3.5
+
+[scurl.rules.safe_browsing]
+weight = 4.0
+
+[scurl.rules.ssl_score]
+weight = 3.5
+
+[scurl.rules.base64_segments]
+weight = 3.0
+[scurl.rules.base64_segments.parameters]
+min_len = 12
+max_sus = 3
+
+[scurl.rules.hyphen_risk]
+weight = 2.5
+[scurl.rules.hyphen_risk.parameters]
+threshold = 2
+
+[scurl.rules.at_risk]
+weight = 4.0
+[scurl.rules.at_risk.parameters]
+threshold = 1
+
+[scurl.rules.equal_risk]
+weight = 2.0
+
+[scurl.rules.num_ratio_risk]
+weight = 2.0
+[scurl.rules.num_ratio_risk.parameters]
+threshold = 0.25
+
+[scurl.rules.mixed_encoding]
+weight = 4.0
+
+[scurl.rules.xss_risk]
+weight = 5.0
+
+[scurl.rules.brand_subdomain]
+weight = 3.0
+[scurl.rules.brand_subdomain.parameters]
+normalized = 0.9
+max_findings = 8
+
+[scurl.rules.unicode_mixed_script]
+weight = 2.5
+[scurl.rules.unicode_mixed_script.parameters]
+normalized = 0.8
+
+[scurl.rules.cleartext_transport]
+weight = 3.0
+[scurl.rules.cleartext_transport.parameters]
+normalized = 0.55
+
+[scurl.rules.ip_in_url]
+weight = 3.0
+
+[scurl.rules.random_domain_risk]
+weight = 3.0
+[scurl.rules.random_domain_risk.parameters]
+threshold = 3.5
+
+[scurl.rules.subdomain_count]
+weight = 2.0
+[scurl.rules.subdomain_count.parameters]
+threshold = 3
+
+[scurl.rules.random_subdomain_risk]
+weight = 3.0
+[scurl.rules.random_subdomain_risk.parameters]
+threshold = 3.5
+
+[scurl.rules.random_path_risk]
+weight = 3.0
+[scurl.rules.random_path_risk.parameters]
+threshold = 3.2
+length = 6
+
+[scurl.rules.query_no_value]
+weight = 1.5
+
+[scurl.rules.query_contains_url]
+weight = 4.0
+
+[scurl.rules.shorteners_keyword_risk]
+weight = 3.0
+[scurl.rules.shorteners_keyword_risk.parameters]
+threshold = 0.75
+
+[scurl.rules.length_domain]
+weight = 1.0
+[scurl.rules.length_domain.parameters]
+threshold = 20
+max_len = 50
+
+[scurl.rules.length_path]
+weight = 2.5
+[scurl.rules.length_path.parameters]
+threshold = 25
+
+[scurl.rules.path_depth_risk]
+weight = 1.5
+[scurl.rules.path_depth_risk.parameters]
+threshold = 5
+
+[scurl.rules.fragment_risk]
+weight = 1.0
+[scurl.rules.fragment_risk.parameters]
+entropy_threshold = 4.0
+
+[scurl.rules.typosquatting]
+weight = 3.5
+
+[scurl.resources]
+trusted_domains = ["ajax.googleapis.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "cloudfront.net", "code.jquery.com", "fonts.googleapis.com", "fonts.gstatic.com", "google-analytics.com", "google.com", "googletagmanager.com", "recaptcha.google.com", "stackpath.bootstrapcdn.com", "static.cloudflareinsights.com", "unpkg.com"]
+[scurl.resources.categories]
+cdn = ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "code.jquery.com", "stackpath.bootstrapcdn.com", "unpkg.com"]
+analytics = ["google-analytics.com", "googletagmanager.com", "static.cloudflareinsights.com"]
+font = ["fonts.googleapis.com", "fonts.gstatic.com"]
+captcha = ["google.com", "recaptcha.google.com"]

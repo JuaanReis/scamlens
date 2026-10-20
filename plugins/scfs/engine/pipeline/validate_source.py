@@ -2,9 +2,10 @@ from stat import S_ISBLK, S_ISFIFO, S_ISCHR, S_ISSOCK, S_ISDIR
 from pathlib import Path
 from typing import Optional
 from ...models.scan_context import ScanContext
-from plugins.scfs import __version__, config
+from ... import __version__
+from scamLens import config
 
-MAX_FILE_SIZE_BYTES = config["scanner"]["max_file_size_bytes"]
+MAX_FILE_SIZE_BYTES = config["scfs"]["scanner"]["max_file_size_bytes"]
 
 def validate_input(ctx: ScanContext) -> Optional[dict]:
     data = ctx.source

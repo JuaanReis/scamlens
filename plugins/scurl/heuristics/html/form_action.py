@@ -1,4 +1,5 @@
 from plugins.scurl.models.result_base import ResultBase
+from plugins.scurl.parsers.resources import external
 from ..registry import register
 
 @register(name="form_action_check", category="html", severity="high", weight=3.0, tags=["html", "form", "phishing"])
@@ -13,7 +14,6 @@ def form_action_check(structure: dict) -> ResultBase:
             }
         )
  
-    original_domain = structure.get("hostname", "")
     forms = tree.css('form')
     external_actions = []
  
@@ -21,10 +21,7 @@ def form_action_check(structure: dict) -> ResultBase:
         action = form.attributes.get('action', '')
         if not action:
             continue
-        parsed = structure.get("netloc", "")
-        if not parsed:
-            continue
-        if parsed != original_domain:
+        if external(action, structure):
             external_actions.append(action)
  
     has_external_action = len(external_actions) > 0

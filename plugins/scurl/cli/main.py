@@ -7,7 +7,7 @@ try:
     from providers.database.connection import init_db
 except KeyboardInterrupt:
     print("FALHA keyboard_interrupt: Execução interrompida pelo usuário")
-    exit(0)
+    exit(130)
 
 def main():
     try:
@@ -23,7 +23,7 @@ def main():
         if args.output == "-":
             scan, target = run_engine(url, args.k, args.timeout, args.threads, args.retries, use_cache=cache)
             save_output("-", scan, target)
-            return
+            return 2 if scan.get("status") == "error" else 0
 
         scan, target = run_engine(url, args.k, args.timeout, args.threads, args.retries, use_cache=cache)
 
@@ -32,13 +32,14 @@ def main():
         if args.output:
             save_output(args.output, scan, target)
             print(f"\nSaída salva em {args.output}")
+        return 2 if scan.get("status") == "error" else 0
 
     except KeyboardInterrupt:
-        exit(0)
+        exit(130)
 
     except Exception as e:
         print(f"FALHA {str(e)}")
-        exit(1)
+        exit(2)
 
 if __name__ == "__main__":
-    main()
+    exit(main())

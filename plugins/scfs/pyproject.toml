@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scfs"
+version = "1.1.0"
+description = "Static heuristic executable scanner for ScamLens"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+scfs = "scfs.cli.main:main"
+
+[tool.setuptools]
+packages = ["scfs", "scfs.models", "scfs.parsers", "scfs.heuristics", "scfs.scoring", "scfs.engine", "scfs.engine.analysis", "scfs.engine.pipeline", "scfs.cli", "scfs.cli.output", "scfs.providers", "scfs.datasets"]
+package-dir = {scfs = "."}
+
+[tool.setuptools.package-data]
+scfs = ["datasets/*.json"]

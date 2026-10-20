@@ -1,8 +1,8 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, AnyHttpUrl
 from typing import Any
 
 class AnalyzeRequest(BaseModel):
-    url: HttpUrl
+    url: AnyHttpUrl
     use_cache: bool = False
 
 class EngineInfo(BaseModel):
@@ -44,6 +44,7 @@ class ScanResponse(BaseModel):
     stats: Stats
     heuristics: list[Heuristic]
     insight: list[str]
+    scoring: dict[str, Any] = {}
 
 class Identity(BaseModel):
     original_url: str

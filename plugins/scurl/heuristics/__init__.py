@@ -24,3 +24,6 @@ from plugins.scurl.heuristics.url import domain
 from plugins.scurl.heuristics.url.typos import typosquatting
 from plugins.scurl.heuristics.server import safe_browsing
 from plugins.scurl.heuristics.html import clients_hint, external_script, favicon_check, form_action, hidden_fields
+from plugins.scurl.heuristics.html import credential_signals
+from plugins.scurl.heuristics.url import deception
+from plugins.scurl.heuristics.url.base64_detect import base64_segments

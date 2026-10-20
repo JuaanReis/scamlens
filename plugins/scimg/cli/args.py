@@ -10,5 +10,7 @@ def parse_args() -> Namespace | None:
         parser.error("Use either positional FILE or -f/--file, not both")
 
     args.file = args.file or args.target
+    if not args.file:
+        parser.error("Informe um arquivo")
 
     return args

@@ -161,6 +161,10 @@ scurl https://exemplo-suspeito.com -c              # usa cache local
 |--------|----------|------|-----------|
 | `POST` | `/api/scurl/analyze/url` | Opcional | Analisa uma URL |
 | `POST` | `/api/scurl/qr/analyze/qr` | Opcional | Analisa uma imagem com QR code |
+| `POST` | `/api/scfs/analyze/file` | Opcional | Analisa um executável ou script por upload |
+| `GET` | `/api/chat/messages` | Obrigatória | Lista mensagens do chat com paginação |
+| `POST` | `/api/chat/messages` | Obrigatória | Persiste e transmite uma mensagem |
+| `WebSocket` | `/api/chat/ws` | Obrigatória | Recebe mensagens em tempo real |
 | `GET` | `/api/scurl/scans` | — | Lista histórico público de scans |
 | `GET` | `/api/scurl/scans/{id}` | — | Detalhe de um scan |
 | `POST` | `/api/auth/register` | — | Cadastro de usuário |

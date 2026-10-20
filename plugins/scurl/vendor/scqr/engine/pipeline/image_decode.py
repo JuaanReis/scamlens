@@ -3,6 +3,7 @@ from PIL import Image
 from plugins.scurl.vendor.scqr.models.scan_context import ScanContext
 from collections import namedtuple
 from zxingcpp import read_barcodes
+from scamLens import config
 
 Point = namedtuple("Point", ["x", "y"])
 
@@ -22,7 +23,14 @@ def _decode(image):
 
 def decode_qrcode(ctx: ScanContext) -> dict | None:
     try:
-        image = Image.open(io.BytesIO(ctx.src_resolved)).convert("L")
+        with Image.open(io.BytesIO(ctx.src_resolved)) as source:
+            if source.width * source.height > config["uploads"]["qr_max_pixels"]:
+                return {
+                    "status": "error",
+                    "meta": {"scan_time_s": 0},
+                    "error": {"type": "size_exceeded", "message": "Imagem excede o limite de pixels configurado"}
+                }
+            image = source.convert("L")
     except Exception:
         return {
             "status": "error",

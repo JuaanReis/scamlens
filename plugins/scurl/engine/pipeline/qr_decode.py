@@ -43,7 +43,7 @@ def validate_input_qr(data: str | bytes | Path) -> dict:
 
     result = run_engine(data)
     if result.get("status", {}) == "error":
-        return _error("scqr_error", result.get("error", {}).get("message", ""))
+        return _error(result.get("error", {}).get("type", "scqr_error"), result.get("error", {}).get("message", ""))
     
     qr_type = result.get("result", {}).get("qr_code_type")
     if qr_type is None:

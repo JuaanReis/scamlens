@@ -23,7 +23,7 @@ def _build_identity(ctx: ScanContext) -> dict:
         unicode_domain = hostname
 
     return {
-        "original_url": structure.get("url", ""),
+        "original_url": ctx.target.url,
         "final_url": response.url if response else None,
         "scheme": structure.get("scheme", ""),
         "hostname": hostname,

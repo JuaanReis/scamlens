@@ -2,14 +2,14 @@ from providers.database.connection import get_connection
 
 def create_user(email: str, name: str, hashed_password: str | None = None) -> dict:
     conn = get_connection()
-    cursor = conn.execute(
-        """
-        INSERT INTO users (email, name, password)
-        VALUES (?, ?, ?)
-        """,
-        (email, name, hashed_password)
-    )
-    conn.commit()
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO users (email, name, password)
+            VALUES (?, ?, ?)
+            """,
+            (email, name, hashed_password)
+        )
     return get_user_by_id(cursor.lastrowid)
 
 def get_user_by_id(user_id: int) -> dict | None:
