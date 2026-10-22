@@ -1,10 +1,11 @@
 from pathlib import Path
+from typing import Literal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from .schema.admin_schema import ActiveBody, PlanBody, VALID_PLANS
 from api.middleware.auth import get_current_admin
 from providers.database.connection import get_connection
 from providers.database.users import list_users, set_user_active, update_user_plan, get_global_metrics
-from providers.database.repository import list_scans
+from providers.database.history import HistoryModule, list_scan_history
 from fastapi.responses import PlainTextResponse
 from scamLens.paths import LOG_DIR
 
@@ -59,24 +60,32 @@ def change_plan(user_id: int, body: PlanBody, admin: dict = Depends(get_current_
 def get_all_scans(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    module: HistoryModule | None = None,
+    user_id: int | None = Query(None, ge=1),
     admin: dict = Depends(get_current_admin),
 ):
-    _audit(admin["id"], "read_scans", detail=f"limit={limit} offset={offset}")
-    return {
-        "scans": list_scans(limit=limit, offset=offset)
-    }
+    _audit(admin["id"], "read_scans", detail=f"module={module} user_id={user_id} limit={limit} offset={offset}")
+    return list_scan_history(module=module, user_id=user_id, limit=limit, offset=offset)
 
 @router.get("/request-logs")
 def get_logs(
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    module: Literal["scurl", "scqr", "scfs", "scpix", "chat"] | None = None,
+    scan_id: str | None = Query(None, min_length=1, max_length=128),
+    user_id: int | None = Query(None, ge=1),
+    status_code: int | None = Query(None, ge=100, le=599),
     admin: dict = Depends(get_current_admin),
 ):
-    _audit(admin["id"], "read_logs", detail=f"limit={limit} offset={offset}")
+    _audit(admin["id"], "read_logs", detail=f"module={module} scan_id={scan_id} user_id={user_id} status_code={status_code} limit={limit} offset={offset}")
     conn = get_connection()
+    filters = {"module": module, "scan_id": scan_id, "user_id": user_id, "status_code": status_code}
+    conditions = [f"{name} = ?" for name, value in filters.items() if value is not None]
+    values = [value for value in filters.values() if value is not None]
+    where = " WHERE " + " AND ".join(conditions) if conditions else ""
     rows = conn.execute(
-        "SELECT * FROM request_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-        (limit, offset),
+        f"SELECT * FROM request_logs{where} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
+        (*values, limit, offset),
     ).fetchall() 
     return [dict(r) for r in rows]
 

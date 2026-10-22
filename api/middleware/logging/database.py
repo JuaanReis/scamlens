@@ -8,7 +8,8 @@ def log_request(
     user_id,
     scan_id,
     status_code: int,
-    duration_ms: float
+    duration_ms: float,
+    module: str | None = None,
 ):
     conn = get_connection()
 
@@ -21,9 +22,10 @@ def log_request(
             user_id,
             scan_id,
             status_code,
-            duration_ms
+            duration_ms,
+            module
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ip,
@@ -33,6 +35,7 @@ def log_request(
             scan_id,
             status_code,
             duration_ms,
+            module,
         ),
     )
 

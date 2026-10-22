@@ -11,6 +11,7 @@ LOGGED_PREFIXES = (
     "/api/chat",
     "/api/scurl",
     "/api/scfs",
+    "/api/scpix",
     "/api/qr",
 )
 
@@ -50,6 +51,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 scan_id=scan_id,
                 status_code=response.status_code,
                 duration_ms=duration_ms,
+                module=_request_module(request.url.path),
             )
 
         return response
+
+
+def _request_module(path: str) -> str | None:
+    if path.startswith(("/api/scurl/qr/", "/api/qr/")):
+        return "scqr"
+    for module in ("scurl", "scfs", "scpix", "chat"):
+        if path == f"/api/{module}" or path.startswith(f"/api/{module}/"):
+            return module
+    return None

@@ -85,26 +85,15 @@ def set_user_active(user_id: int, is_active: bool) -> None:
     conn.commit()
 
 def get_global_metrics() -> dict:
+    from providers.database.history import scan_activity
+
     conn = get_connection()
     total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    total_scans = conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
-    threats = conn.execute(
-        "SELECT COUNT(*) FROM scans WHERE risk_level IN ('high', 'critical')"
-    ).fetchone()[0]
-    anon_scans = conn.execute("SELECT COUNT(*) FROM scans WHERE user_id IS NULL").fetchone()[0]
-
-    weekly = []
-    for i in range(5, -1, -1):
-        count = conn.execute(
-            "SELECT COUNT(*) FROM scans WHERE DATE(timestamp) = DATE('now', ? || ' days')",
-            (f"-{i}",)
-        ).fetchone()[0]
-        weekly.append(count)
-
+    activity = scan_activity()
     return {
         "total_users": total_users,
-        "total_scans": total_scans,
-        "threats": threats,
-        "anon_scans": anon_scans,
-        "weekly": weekly,
+        "total_scans": activity["total_scans"],
+        "threats": activity["threats"],
+        "anon_scans": activity["anonymous_scans"],
+        "weekly": activity["weekly"],
     }

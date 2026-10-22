@@ -25,11 +25,14 @@ from api.router.scurl.url import router as scurl_analyze_router
 from api.router.scurl.qr import router as scurl_qr_router
 from api.router.scurl.scans import router as scurl_scans_router
 from api.router.scfs.file import router as scfs_analyze_router
+from api.router.scpix.pix import router as scpix_analyze_router
+from api.router.scfs.scans import router as scfs_scans_router
+from api.router.scpix.scans import router as scpix_scans_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from plugins.scurl.heuristics.registry import get_rules
 from plugins.scfs.heuristics import get_rules as get_scfs_rules
-from scamLens.paths import STATIC, _STORAGE
+from scamLens.paths import STATIC
 settings = get_settings()
 
 @asynccontextmanager
@@ -79,7 +82,6 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 app.mount("/storage/avatars", StaticFiles(directory=config["paths"]["avatar"]), name="avatars")
-app.mount("/storage", StaticFiles(directory=str(_STORAGE)), name="storage")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -109,6 +111,9 @@ app.include_router(scurl_analyze_router, prefix="/api/scurl")
 app.include_router(scurl_scans_router, prefix="/api/scurl")
 app.include_router(scurl_qr_router, prefix="/api/scurl/qr")
 app.include_router(scfs_analyze_router, prefix="/api/scfs")
+app.include_router(scpix_analyze_router, prefix="/api/scpix")
+app.include_router(scfs_scans_router, prefix="/api/scfs")
+app.include_router(scpix_scans_router, prefix="/api/scpix")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

@@ -1,9 +1,11 @@
 from re import compile
 from uuid import uuid4
 from pathlib import Path
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from api.middleware.auth import get_current_user
 from providers.database.repository import get_user_activity
+from providers.database.history import HistoryModule, list_scan_history
+from api.router.schema.history_schema import ScanHistoryResponse
 from providers.database.users import update_avatar
 from scamLens import config
 
@@ -45,6 +47,12 @@ def me(user: dict = Depends(get_current_user)):
         },
         "activity": activity,
     }
+
+@router.get("/scans", response_model=ScanHistoryResponse)
+def history(module: HistoryModule | None = None,
+            limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+            user: dict = Depends(get_current_user)):
+    return list_scan_history(module=module, user_id=user["id"], limit=limit, offset=offset)
 
 @router.post("/avatar")
 async def upload_avatar(file: UploadFile = File(...), user: dict = Depends(get_current_user)):

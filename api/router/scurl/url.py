@@ -89,6 +89,7 @@ async def analyze_url(request: Request, body: AnalyzeRequest):
 
     if "meta" in scan:
         scan["meta"]["scan_time_s"] = round(perf_counter() - start, 3)
+        request.state.scan_id = scan["meta"].get("scan_id")
 
     if scan.get("status") == "error":
         return JSONResponse(status_code=400, content=scan)

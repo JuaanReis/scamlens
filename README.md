@@ -153,6 +153,15 @@ scurl https://exemplo-suspeito.com -t 4 -T 10      # 4 threads, timeout 10s
 scurl https://exemplo-suspeito.com -c              # usa cache local
 ```
 
+Para analisar um Pix copia e cola localmente:
+
+```bash
+scpix --payload '000201...6304ABCD' --json
+scpix --file cobranca.txt --expected-name 'LOJA EXEMPLO' --expected-amount 35.90
+```
+
+O SCPIX avalia anomalias técnicas e contextuais do BR Code. Cobranças dinâmicas não são consultadas automaticamente. Veja [plugins/scpix/README.md](plugins/scpix/README.md) para formatos de entrada, heurísticas e limites.
+
 ---
 
 ## Endpoints
@@ -162,11 +171,17 @@ scurl https://exemplo-suspeito.com -c              # usa cache local
 | `POST` | `/api/scurl/analyze/url` | Opcional | Analisa uma URL |
 | `POST` | `/api/scurl/qr/analyze/qr` | Opcional | Analisa uma imagem com QR code |
 | `POST` | `/api/scfs/analyze/file` | Opcional | Analisa um executável ou script por upload |
+| `POST` | `/api/scpix/analyze/pix` | Opcional | Analisa um Pix copia e cola enviado como JSON (`payload` e `expected` opcional) |
 | `GET` | `/api/chat/messages` | Obrigatória | Lista mensagens do chat com paginação |
 | `POST` | `/api/chat/messages` | Obrigatória | Persiste e transmite uma mensagem |
 | `WebSocket` | `/api/chat/ws` | Obrigatória | Recebe mensagens em tempo real |
 | `GET` | `/api/scurl/scans` | — | Lista histórico público de scans |
 | `GET` | `/api/scurl/scans/{id}` | — | Detalhe de um scan |
+| `GET` | `/api/scfs/scans` | Obrigatória | Histórico de arquivos do usuário; admin pode ver todos |
+| `GET` | `/api/scfs/scans/{scan_id}` | Obrigatória | Resultado salvo de análise de arquivo |
+| `GET` | `/api/scpix/scans` | Obrigatória | Histórico Pix do usuário; admin pode ver todos |
+| `GET` | `/api/scpix/scans/{scan_id}` | Obrigatória | Resultado salvo de análise Pix |
+| `GET` | `/api/user/scans` | Obrigatória | Meu histórico de URL/QR, arquivos e Pix, com filtro `module` |
 | `POST` | `/api/auth/register` | — | Cadastro de usuário |
 | `POST` | `/api/auth/login` | — | Login (seta cookies httpOnly) |
 | `POST` | `/api/auth/refresh` | Cookie | Renova o access token |
@@ -177,6 +192,10 @@ scurl https://exemplo-suspeito.com -c              # usa cache local
 | `GET` | `/health` | — | Liveness probe (verifica banco) |
 
 Para a referência completa, veja [docs/usage.md](./docs/USAGE.md).
+
+Análises de arquivos e Pix concluídas pela API são salvas automaticamente em `module_scans`, incluindo resultados parciais. Repetições do mesmo alvo geram registros separados. O banco guarda o resultado estruturado; arquivos enviados, payload Pix bruto, chave completa e token de cobrança dinâmica não são persistidos. Resultados anônimos ficam disponíveis apenas para administradores. Os motores e CLIs de SCFS/SCPIX continuam sem persistência automática.
+
+`GET /api/admin/scans?module=scpix` reúne os módulos; `module` e `user_id` são filtros opcionais. `GET /api/admin/request-logs?module=scpix` permite filtrar por `module`, `scan_id`, `user_id` e `status_code`; QR aparece como `scqr` nos logs e compartilha o histórico de resultados de URL (`scurl`). As métricas de administração e `/api/user/me` incluem arquivos e Pix. O SCIMG ainda não produz análises e não participa desse histórico. Veja [docs/history.md](docs/history.md).
 
 ---
 

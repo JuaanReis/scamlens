@@ -268,7 +268,7 @@ Os limites vêm de `[scfs.scanner]` em `scamLens/config.toml`: `max_file_size_by
 
 A rota usa a mesma autenticação opcional e as mesmas cotas por plano de `scurl`, com uso diário registrado no módulo `scfs`. A cota anônima por IP é compartilhada com os outros scans. Erros de upload/análise não consomem a cota.
 
-Respostas: `400` para arquivo vazio/corrompido, `401` para cota anônima esgotada, `413` para tamanho excedido, `415` para formato não suportado, `422` para ausência de arquivo, `429` para cota diária/rate limit e `503` para scanner ocupado. Não é criado histórico de scans de arquivo nesta rota; o arquivo enviado não é persistido pela aplicação.
+Respostas: `400` para arquivo vazio/corrompido, `401` para cota anônima esgotada, `413` para tamanho excedido, `415` para formato não suportado, `422` para ausência de arquivo, `429` para cota diária/rate limit e `503` para scanner ocupado ou falha ao salvar o histórico. O resultado estruturado é salvo automaticamente; o arquivo enviado não é persistido pela aplicação. Consulte [Histórico e logs](history.md) para listas, detalhes e filtros.
 
 
 ## Chat

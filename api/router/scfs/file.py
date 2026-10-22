@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import sqlite3
 from functools import partial
 from time import perf_counter
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException
@@ -9,6 +11,7 @@ from api.router.scfs.schema.map_result import AnalyzeResponse, ScanResponse, Tar
 from plugins.scfs import run_engine, Settings
 from providers.database.usage import is_usage_exceeded, increment_usage, PLAN_LIMITS
 from providers.database.quota import is_quota_exceeded, increment_anonymous_count
+from providers.database.history import save_module_scan
 from scamLens import config
 
 router = APIRouter(tags=["scfs"])
@@ -81,9 +84,15 @@ async def analyze_file(request: Request, file: UploadFile = File(...)):
         status_code = 415 if scan["error"]["code"] == "unsupported_format" else 400
         return JSONResponse(status_code=status_code, content=scan)
 
+    result = AnalyzeResponse(scan=ScanResponse(**scan), target=TargetResponse(**target))
+    try:
+        save_module_scan("scfs", result.scan.model_dump(), result.target.model_dump(), user_id=user["id"] if user else None)
+    except sqlite3.Error:
+        logging.getLogger(__name__).exception("Não foi possível salvar o histórico SCFS")
+        return JSONResponse(status_code=503, content={"error": "não foi possível salvar a análise; tente novamente"})
+
     if user is None:
         increment_anonymous_count(ip)
     else:
         increment_usage(user["id"], "scfs")
-
-    return AnalyzeResponse(scan=ScanResponse(**scan), target=TargetResponse(**target))
+    return result

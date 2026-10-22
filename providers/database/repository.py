@@ -37,34 +37,19 @@ def list_scans_by_user(user_id: int, limit: int = 50, offset: int = 0) -> list[d
     return [dict(row) for row in rows]
 
 def get_user_activity(user_id: int) -> dict:
+    from providers.database.history import scan_activity
+
     conn = get_connection()
-
-    total = conn.execute(
-        "SELECT COUNT(*) FROM scans WHERE user_id = ?", (user_id,)
+    activity = scan_activity(user_id)
+    average = conn.execute(
+        "SELECT AVG(duration_ms) FROM request_logs WHERE user_id = ? AND method = 'POST' AND scan_id IS NOT NULL AND status_code = 200",
+        (user_id,),
     ).fetchone()[0]
-
-    threats = conn.execute(
-        "SELECT COUNT(*) FROM scans WHERE user_id = ? AND risk_level IN ('high', 'critical')",
-        (user_id,)
-    ).fetchone()[0]
-
-    weekly = []
-    for i in range(5, -1, -1):  
-        count = conn.execute(
-            """
-            SELECT COUNT(*) FROM scans
-            WHERE user_id = ?
-            AND DATE(timestamp) = DATE('now', ? || ' days')
-            """,
-            (user_id, f"-{i}")
-        ).fetchone()[0]
-        weekly.append(count)
-
     return {
-        "total_scans":      total,
-        "avg_response_ms":  0,
-        "threats_detected": threats,
-        "weekly":           weekly,
+        "total_scans": activity["total_scans"],
+        "avg_response_ms": round(average, 2) if average is not None else 0,
+        "threats_detected": activity["threats"],
+        "weekly": activity["weekly"],
     }
 
 _INSERT_QUERY = INSERT_FILE.read_text(encoding="utf-8")

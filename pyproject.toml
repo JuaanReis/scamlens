@@ -33,6 +33,7 @@ dependencies = [
 
 [project.scripts]
 scurl = "plugins.scurl.cli.main:main"
+scpix = "plugins.scpix.cli.main:main"
 scamlens-api = "api.server:run"
 
 [tool.setuptools.packages.find]
