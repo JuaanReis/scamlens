@@ -28,12 +28,12 @@ def run_engine(source: str | Path | bytes, k: int | None = None, timeout: float 
         raise ValueError("processors e retries devem ser inteiros")
     if score_model not in ("legacy", "grouped"):
         raise ValueError(f"Modelo de score desconhecido: {score_model}")
-    qr_result = validate_input_qr(source) 
+    qr_result = validate_input_qr(source)
 
     if qr_result.get("status") == "error":
         return qr_result, {}
 
-    url = qr_result.get("meta", {}).get("data", source) 
+    url = qr_result.get("meta", {}).get("data", source)
 
     ctx = ScanContext(target=TargetData(url=url))
 
@@ -52,10 +52,16 @@ def run_engine(source: str | Path | bytes, k: int | None = None, timeout: float 
     rules = get_rules()
 
     if error := execute_rules(ctx, rules, processors):
-        return build_error_response(ctx, **error["error"]), {}
+        return build_error_response(ctx, error_type=error["error"]["type"],
+                                    message=error["error"]["message"]), {}
 
-    meta_attribute(ctx, processors)
+    meta_attribute(ctx, 1)
     calculate_score(ctx, k, score_model)
+
+    if (not ctx.weights or not isfinite(sum(ctx.weights)) or sum(ctx.weights) <= 0
+            or not isfinite(ctx.score)):
+        return build_error_response(ctx, error_type="no_rule_coverage",
+                                    message="Nenhuma regra efetiva disponível para calcular o risco"), {}
 
     scan_result, target_data = build_response(ctx, rules_total=len(rules))
     scan_result["scoring"] = {"model": score_model, "k": k, "config_hash": scoring_fingerprint(app_config)}

@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import re
 from typing import Literal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from .schema.admin_schema import ActiveBody, PlanBody, VALID_PLANS
@@ -9,7 +11,9 @@ from providers.database.history import HistoryModule, list_scan_history
 from fastapi.responses import PlainTextResponse
 from scamLens.paths import LOG_DIR
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+from api.middleware.limiter import RateLimitedRoute
+
+router = APIRouter(route_class=RateLimitedRoute, prefix="/api/admin", tags=["admin"])
 
 def _audit(admin_id: int, action: str, target_user_id: int | None = None, detail: str | None = None) -> None:
     conn = get_connection()
@@ -86,7 +90,7 @@ def get_logs(
     rows = conn.execute(
         f"SELECT * FROM request_logs{where} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
         (*values, limit, offset),
-    ).fetchall() 
+    ).fetchall()
     return [dict(r) for r in rows]
 
 def _safe_log_path(filename: str) -> Path:
@@ -95,7 +99,8 @@ def _safe_log_path(filename: str) -> Path:
 
     if (
         base not in candidate.parents
-        or candidate.suffix.lower() != ".log"
+        or not (candidate.name == "host_info.txt"
+                or re.search(r"\.log(?:\.[1-9][0-9]*)?$", candidate.name, re.IGNORECASE))
         or not candidate.is_file()
     ):
         raise HTTPException(
@@ -110,25 +115,63 @@ def list_logs(admin=Depends(get_current_admin)):
     _audit(admin["id"], "list_logs")
 
     files = []
-    for f in sorted(LOG_DIR.glob("*.log")):
-        stat = f.stat()
+    for f in sorted(LOG_DIR.rglob("*")):
+        if f.name != "host_info.txt" and not re.search(r"\.log(?:\.[1-9][0-9]*)?$", f.name, re.IGNORECASE):
+            continue
+        try:
+            path = _safe_log_path(f.relative_to(LOG_DIR).as_posix())
+            stat = path.stat()
+        except (HTTPException, OSError):
+            continue
+        relative = f.relative_to(LOG_DIR)
         files.append({
-            "name": f.name,
+            "name": relative.as_posix(),
+            "session": relative.parts[0] if len(relative.parts) > 1 else None,
             "size_bytes": stat.st_size,
             "modified_at": stat.st_mtime,
         })
     return {"logs": files}
 
-@router.get("/logs/{filename}")
+def _reverse_log_lines(path):
+    with path.open("rb") as fh:
+        position = fh.seek(0, 2)
+        pending = b""
+        while position:
+            size = min(position, 65536)
+            position -= size
+            fh.seek(position)
+            parts = (fh.read(size) + pending).split(b"\n")
+            pending = parts[0]
+            for line in reversed(parts[1:]):
+                if line:
+                    yield line.removesuffix(b"\r").decode("utf-8", errors="replace") + "\n"
+        if pending:
+            yield pending.removesuffix(b"\r").decode("utf-8", errors="replace") + "\n"
+
+@router.get("/logs/{filename:path}")
 def read_log(
     filename: str,
     tail: int = Query(500, ge=1, le=10000, description="últimas N linhas"),
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None = Query(None),
+    category: Literal["server", "request", "scanner", "dependency"] | None = Query(None),
     admin=Depends(get_current_admin),
 ):
     path = _safe_log_path(filename)
-    _audit(admin["id"], "read_log", detail=f"file={filename} tail={tail}")
-
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        lines = fh.readlines()[-tail:]
-
-    return PlainTextResponse("".join(lines))
+    _audit(admin["id"], "read_log", detail=f"file={filename} tail={tail} level={level} category={category}")
+    lines = []
+    for line in _reverse_log_lines(path):
+        if level is not None or category is not None:
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            if level is not None and entry.get("level") != level:
+                continue
+            if category is not None and entry.get("category") != category:
+                continue
+        lines.append(line)
+        if len(lines) == tail:
+            break
+    return PlainTextResponse("".join(reversed(lines)))

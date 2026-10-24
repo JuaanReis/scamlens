@@ -200,12 +200,13 @@ curl -X PATCH http://localhost:5300/api/admin/users/3/plan \
 curl "http://localhost:5300/api/admin/scans?limit=50" -b admin_cookies.txt
 curl "http://localhost:5300/api/admin/request-logs?limit=200" -b admin_cookies.txt
 curl http://localhost:5300/api/admin/logs -b admin_cookies.txt
-curl "http://localhost:5300/api/admin/logs/scamlens_2026-07-27_10-00-00_pid1234.log?tail=500" -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/logs/sl_20261024T170000123456Z_a1b2c3d4/process_1234/process_1234.log?tail=500&category=server&level=ERROR" -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/logs/sl_20261024T170000123456Z_a1b2c3d4/process_1234/host_info.txt" -b admin_cookies.txt
 ```
 
 `plan_name` válido: `standard`, `go_pro`, `plus_premium` (qualquer outro valor → `400`). Toda ação admin (inclusive leituras de listas) grava uma linha em `admin_audit_log` — isso inclui simplesmente listar usuários ou scans, não só ações de escrita.
 
-`GET /api/admin/logs/{filename}` só existe se `[server].logs = true` no `config.toml` (senão não há arquivos de log pra listar) e só serve arquivos dentro do diretório de log — tentativa de path traversal (`../`) retorna `400`.
+`GET /api/admin/logs/{filename}` aceita o caminho relativo retornado na listagem, incluindo pasta da sessão, subpasta do PID e sufixo de rotação. Cada PID possui um `host_info.txt` separado, gerado na inicialização, com versão, início, Python, host, plataforma, modo, nível de log, reload e bootstrap. Em produção, os campos que já eram mascarados continuam com `xxxx`. A listagem inclui esse arquivo; leia-o sem filtros `category` ou `level`, que se aplicam aos eventos JSON. Serve apenas arquivos dentro do diretório de logs; caminhos externos ou inexistentes retornam `404`. `[logs].enabled` controla a geração de logs; as demais opções de níveis, lotes e retenção ficam nas seções `[logs]` do `scamLens/config.toml`.
 
 ---
 
@@ -242,7 +243,7 @@ Flags reais (`plugins/scurl/cli/args.py`):
 |------|-------------|---------|
 | `-u/--url` ou posicional | URL alvo (um ou outro, não os dois) | — |
 | `-v/--verbose` | saída detalhada | `false` |
-| `-t/--threads` | threads do coletor | `1` |
+| `-t/--threads` | opção de compatibilidade; execução sequencial | `1` |
 | `-T/--timeout` | timeout de rede em segundos | `5` |
 | `-k` | parâmetro do scoring (ver `calculate_score`) | `5` |
 | `-r/--retries` | tentativas de coleta | `3` |
@@ -252,7 +253,7 @@ Flags reais (`plugins/scurl/cli/args.py`):
 
 **Cuidado com `-o` para arquivo:** `save_output()` monta o JSON como `{"url": target, **scan}` — ou seja, o dicionário completo do `target` (identidade, rede, TLS, DNS, HTTP, conteúdo) fica salvo sob a chave `"url"`, misturado com os campos do `scan` no nível raiz. Isso é diferente do formato que a API HTTP devolve (`{"scan": {...}, "target": {...}}`), então não assuma que o JSON salvo pelo CLI tem o mesmo shape do `AnalyzeResponse` da API — hoje eles divergem.
 
-Não há CLI publicado para `scfs` ou `scqr` isoladamente (nenhum entry point em `pyproject.toml` além de `scurl` e `scamlens-api`); só existem como módulos internos.
+Os entry points deste projeto são `scurl`, `scpix` e `scamlens-api`. O Pix também pode ser executado da raiz com `python -m plugins.scpix.cli.main`; SCFS aceita `python -m plugins.scfs`.
 
 ## Análise de arquivos — scfs
 
@@ -314,3 +315,13 @@ max_page_size = 100
 ```
 
 Reinicie a API após alterar a configuração ou integrar as novas rotas. A dependência `websockets` faz parte da instalação de runtime para que o Uvicorn disponibilize o transporte WebSocket.
+
+## Limites e sessões
+
+O rate limit conta requisições por IP, rota e método em cada processo. Respostas 429 de frequência incluem `Retry-After`. A cota diária é compartilhada no SQLite e reservada antes de iniciar o motor. Erros normais devolvem a reserva. Cancelamento após submissão do motor é cobrado, e sua vaga só é liberada quando o trabalho acaba.
+
+O SCURL executa regras sequenciais. `max_rule_seconds` é um prazo cooperativo entre chamadas de regras, não um cancelamento forçado da função corrente. Exceção de regra, excesso do prazo ou falta de cobertura efetiva geram erro técnico; não são gravados como resultado seguro nem reutilizados do cache antigo.
+
+Configure `cors.allow_origins` com origens exatas para frontends externos. O padrão é uma lista vazia. WebSockets aceitam mesma origem ou uma origem explicitamente permitida e revalidam a sessão antes de broadcast e em até cinco segundos durante ociosidade. O fechamento por expiração usa também o prazo do token.
+
+Inicie esta cópia com `python -m api.server` na raiz. Comandos globais instalados em outro ambiente podem executar outra pasta; atualize a instalação editable no ambiente virtual escolhido.

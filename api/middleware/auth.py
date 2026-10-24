@@ -24,6 +24,7 @@ def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Usuário inválido")
 
     request.state.user_id = user["id"]
+    request.state.token_expires_at = payload["exp"]
     return user
 
 def get_current_admin(request: Request) -> dict:

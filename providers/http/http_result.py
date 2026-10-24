@@ -15,7 +15,7 @@ class HTTPResult:
             - redirects (int): O número de redirecionamentos ocorridos durante a requisição. Padrão: 0.
         Exemplo de uso:
         ```
-        result = HTTPResult(   
+        result = HTTPResult(
             url="https://www.exemplo.com",
             status=200,
             headers={"Content-Type": "text/html"},
@@ -26,7 +26,7 @@ class HTTPResult:
         )
         ```
     """
-    
+
     url: str
     status: int
     headers: dict
@@ -35,3 +35,4 @@ class HTTPResult:
     size: int
     redirects: int = 0
     redirect_chain: list = None
+    resolved_ip: str | None = None

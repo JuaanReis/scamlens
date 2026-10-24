@@ -3,7 +3,9 @@ from fastapi.responses import JSONResponse
 from .schema.map_result import ScanResponse, ScansListResponse, AnalyzeResponse, TargetResponse
 from providers.database.repository import list_scans, get_scan
 
-router = APIRouter()
+from api.middleware.limiter import RateLimitedRoute
+
+router = APIRouter(route_class=RateLimitedRoute)
 
 @router.get(
     "/scans",
@@ -25,7 +27,7 @@ async def get_scan_by_identifier(identifier: str):
     result = get_scan(identifier)
     if not result:
         return JSONResponse(status_code=404, content={
-            "status": "error", 
+            "status": "error",
             "message": "Scan não encontrado"
         })
     scan, target = result

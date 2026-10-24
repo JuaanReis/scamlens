@@ -2,11 +2,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, HTMLResponse
+from scamLens import __version__
 
-router = APIRouter()
+from api.middleware.limiter import RateLimitedRoute
+
+router = APIRouter(route_class=RateLimitedRoute)
 _STATIC = Path(__file__).parent.parent / "static"
 
-_INDEX_HTML: str = (_STATIC / "index.html").read_text(encoding="utf-8")
+_INDEX_HTML: str = (_STATIC / "index.html").read_text(encoding="utf-8").replace("{{VERSION}}", __version__)
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index():

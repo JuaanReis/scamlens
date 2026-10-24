@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from providers.database.connection import get_connection
 
-def revoke_token(jti: str, expires_at: datetime) -> None:
+def revoke_token(jti: str, expires_at: datetime) -> bool:
     conn = get_connection()
-    conn.execute(
+    cursor = conn.execute(
         """
         INSERT OR IGNORE INTO revoked_tokens (jti, expires_at)
         VALUES (?, ?)
@@ -11,6 +11,7 @@ def revoke_token(jti: str, expires_at: datetime) -> None:
         (jti, expires_at.isoformat()),
     )
     conn.commit()
+    return cursor.rowcount == 1
 
 def is_token_revoked(jti: str) -> bool:
     conn = get_connection()

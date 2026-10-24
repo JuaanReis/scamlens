@@ -7,6 +7,38 @@ reload = false
 [logs]
 enabled = true
 level = "INFO"
+request_level = "INFO"
+scanner_level = "WARNING"
+dependency_level = "WARNING"
+console = true
+console_level = "WARNING"
+batch_size = 100
+flush_interval = 0.5
+queue_size = 10000
+max_bytes = 10485760 # 10 MiB por processo
+backup_count = 5
+retention_days = 14
+max_sessions = 20
+
+[logs.levels]
+
+[logs.requests]
+enabled = true
+include_prefixes = ["/"]
+exclude_prefixes = ["/static", "/storage/avatars", "/favicon.ico"]
+include_query = false
+include_user_agent = false
+include_referer = false
+
+[logs.database]
+enabled = true
+include_prefixes = ["/api/chat", "/api/scurl", "/api/scfs", "/api/scpix", "/api/qr"]
+batch_size = 100
+flush_interval = 1.0
+queue_size = 10000
+retention_days = 30
+max_rows = 100000
+cleanup_interval = 3600.0
 
 [validation]
 max_errors = 10
@@ -23,7 +55,7 @@ max_age = 600
 expose_headers = ["*"]
 allow_methods = ["*"]
 allow_headers = ["*"]
-allow_origins = ["*"]
+allow_origins = ["http://localhost:8000"]
 
 [rate_limit]
 enabled = true
@@ -34,7 +66,7 @@ max_concurrent_scans = 20
 secure = true
 samesite = "lax"
 httponly = true
-ttl_minutes = 30 # access token
+ttl_minutes = 90 # access token
 ttl_days = 30 # refresh token
 session_ttl_days = 1
 
@@ -73,6 +105,35 @@ logs = "providers/storage/logs"
 static = "api/static"
 scamlens_db_path = "providers/storage/db/scamlens.db"
 
+[database]
+timeout = 10.0
+
+[chat]
+max_message_length = 2000
+default_page_size = 50
+max_page_size = 100
+
+[auth]
+max_password_bytes = 72
+max_name_length = 128
+bcrypt_rounds = 12
+
+[uploads]
+avatar_max_bytes = 2097152
+qr_max_bytes = 10485760
+qr_max_pixels = 20000000
+
+[quota]
+anonymous_daily_limit = 3
+
+[quota.plans]
+standard = 5
+go_pro = 25
+plus_premium = -1 # ilimitado
+
+[tls]
+timeout = 5.0
+
 [scurl]
 [scurl.scanner]
 timeout = 6.0
@@ -107,36 +168,6 @@ disabled_rules = []
 max_file_size_bytes = 30000000
 [domain]
 cache_size = 4096
-
-[database]
-timeout = 10.0
-
-[chat]
-max_message_length = 2000
-default_page_size = 50
-max_page_size = 100
-
-[auth]
-# bcrypt admite no máximo 72 bytes.
-max_password_bytes = 72
-max_name_length = 128
-bcrypt_rounds = 12
-
-[uploads]
-avatar_max_bytes = 2097152
-qr_max_bytes = 10485760
-qr_max_pixels = 20000000
-
-[quota]
-anonymous_daily_limit = 3
-
-[quota.plans]
-standard = 5
-go_pro = 25
-plus_premium = -1 # ilimitado
-
-[tls]
-timeout = 5.0
 
 [scurl.scoring]
 classification = [

@@ -1,4 +1,17 @@
-document.getElementById("version").textContent = "1.1.0";
+"use strict";
+
+// ScamLens: documentação normal até que o visitante descubra o segredo.
+// O modo secreto é intencionalmente surreal, mas não é executado por padrão.
+const EGG_STORAGE_KEY = "scamlens:easter-egg:seen";
+const EGG_SEQUENCE = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
+let eggActive = false;
+const eggIntervals = new Set();
+
+function registerEggInterval(callback, delay) {
+  const id = window.setInterval(callback, delay);
+  eggIntervals.add(id);
+  return id;
+}
 
 function corruptContent() {
   const blocks = document.querySelectorAll(".main-content");
@@ -112,32 +125,35 @@ function corruptLinks() {
   document.querySelectorAll("nav a").forEach(a => {
     a.href = weirdSites[Math.floor(Math.random() * weirdSites.length)];
     a.target = "_blank";
+    a.rel = "noopener noreferrer";
   });
 
   document.querySelectorAll("footer a").forEach(a => {
     if (!a.href.includes("github")) {
       a.href = weirdSites[Math.floor(Math.random() * weirdSites.length)];
       a.target = "_blank";
+    a.rel = "noopener noreferrer";
     }
   });
 
   document.querySelectorAll(".main-content a").forEach(a => {
     a.href = weirdSites[Math.floor(Math.random() * weirdSites.length)];
     a.target = "_blank";
+    a.rel = "noopener noreferrer";
   });
 
   document.querySelectorAll(".main-content p, .main-content td").forEach(el => {
     if (Math.random() < 0.4) {
       const url = weirdSites[Math.floor(Math.random() * weirdSites.length)];
       el.style.cursor = "pointer";
-      el.addEventListener("click", () => window.open(url, "_blank"));
+      el.addEventListener("click", () => window.open(url, "_blank", "noopener,noreferrer"));
     }
   });
 }
 
-function decayText() {
+function decayText(registerInterval) {
   const chars = ["█", "░", "?", "⟁", "☍", "▓", "⌘", "π", "⓿"];
-  setInterval(() => {
+  registerInterval(() => {
     const els = document.querySelectorAll("p, td, h2, h3");
     const el = els[Math.floor(Math.random() * els.length)];
     if (!el) return;
@@ -164,95 +180,8 @@ function glitch() {
   }, 60);
 }
 
-function activateEasterEgg() {
-  localStorage.setItem("seen", "1");
-  document.body.style.backgroundImage = "url('https://i.pinimg.com/originals/1f/1a/f7/1f1af705467aa7d5df2264d21fc23fe2.gif')";
-  document.body.style.backgroundRepeat = "repeat";
-  document.body.style.backgroundAttachment = "fixed";
-  document.getElementById("version").textContent = "???????????????????????";
-  document.getElementById("message").textContent = "Why did you do that?";
-  corruptContent();
-  corruptLinks();
-  decayText();
-  document.title = "Maybe I'm not doing so well after all.";
 
-  const titles = [
-    "Maybe I'm not doing so well after all.",
-    "scamLens_api",
-    "you left this open.",
-    "don't look away."
-  ];
-  let ti = 0;
-  setInterval(() => {
-    document.title = titles[ti % titles.length];
-    ti++;
-  }, 900);
-
-  document.querySelector(".logo-text").textContent = "⟁ᚫ⟁ ::: ░▒▓ ☍☌☍ ▓▒░ ::: ϞϞϞ";
-  document.getElementById("link").href = "https://www.cameronsworld.net/";
-  document.getElementById("desc").textContent = "You know what I mean?";
-
-  setInterval(() => {
-    if (Math.random() < 0.15) glitch();
-  }, 2000);
-
-  setTimeout(() => {
-    const audio = new Audio("/static/Blue_Skies.mp3");
-    audio.volume = 0.2;
-    audio.play();
-  }, 3000);
-}
-
-(function() {
-  var _seq = [38,38,40,40,37,39,37,39,66,65];
-  var _buf = [];
-  document.addEventListener('keydown', function(e) {
-    _buf.push(e.keyCode);
-    if (_buf.length > _seq.length) _buf.shift();
-    if (_buf.length === _seq.length && _buf.every(function(v, i) { return v === _seq[i]; })) {
-      activateEasterEgg();
-    }
-  });
-})();
-
-(function() {
-  let tapCount = 0;
-  let tapTimer;
-  document.querySelector(".logo-text").addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    tapCount++;
-    clearTimeout(tapTimer);
-    tapTimer = setTimeout(() => tapCount = 0, 1500);
-    if (tapCount >= 7) {
-      tapCount = 0;
-      activateEasterEgg();
-    }
-  });
-})();
-
-const messages = [
-  "you again?",
-  "strange.",
-  "I remember this window.",
-  "something persisted.",
-  "there you are.",
-  "still here?",
-  "this wasn't here before.",
-  "it kept your session.",
-  "I thought this instance was closed.",
-  "you returned too early.",
-  "...",
-  "the cache survived.",
-  "didn't this end already?",
-  "there is residual activity.",
-  "the observer remembers."
-];
-
-if (localStorage.getItem("seen")) {
-  if (Math.random() < 0.65) {
-    document.title = messages[Math.floor(Math.random() * messages.length)];
-  }
-
+function showReturnPopup() {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed;
@@ -290,10 +219,209 @@ if (localStorage.getItem("seen")) {
     </div>
   `;
 
-  setTimeout(() => {
+  window.setTimeout(() => {
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
     document.getElementById("popup-close").addEventListener("click", () => overlay.remove());
     document.getElementById("popup-ok").addEventListener("click", () => overlay.remove());
   }, 400 + Math.random() * 900);
+}
+
+
+// A anomalia progride em estágios; todos os efeitos ficam isolados no modo secreto.
+function startLivingCorruption() {
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const veil = document.createElement('div');
+  veil.className = 'egg-veil';
+  veil.setAttribute('aria-hidden', 'true');
+  veil.innerHTML = '<div class="egg-scanlines"></div><div class="egg-noise"></div><div class="egg-terminal"></div><div class="egg-ghost"></div>';
+  document.body.appendChild(veil);
+  const terminal = veil.querySelector('.egg-terminal');
+  const ghost = veil.querySelector('.egg-ghost');
+  const phrases = [
+    'MEMORY LEAK // 0x000000', 'THIS PAGE IS NOT A PAGE',
+    'DO NOT TRUST THE SCORE', 'THE OBSERVER IS STILL HERE',
+    'SCAMLENS.EXE HAS STOPPED RESPONDING', 'PACKET LOST // YOU FOUND ME',
+    'CACHE CORRUPTED', 'I CAN SEE THE CURSOR', 'RETRYING REALITY...'
+  ];
+  const random = (min, max) => min + Math.random() * (max - min);
+  let stage = 0;
+  let tick = 0;
+  let pointerX = innerWidth / 2;
+  let pointerY = innerHeight / 2;
+  document.body.classList.add('egg-active');
+  const updatePointer = event => { pointerX = event.clientX; pointerY = event.clientY; };
+  document.addEventListener('pointermove', updatePointer, { passive: true });
+
+  const burst = () => {
+    if (reducedMotion) return;
+    const fragment = document.createElement('span');
+    fragment.className = 'egg-fragment';
+    fragment.textContent = phrases[Math.floor(Math.random() * phrases.length)];
+    fragment.style.left = `${random(3, 75)}vw`;
+    fragment.style.top = `${random(4, 90)}vh`;
+    fragment.style.fontSize = `${random(10, 22)}px`;
+    fragment.style.setProperty('--skew', `${random(-10, 10)}deg`);
+    veil.appendChild(fragment);
+    window.setTimeout(() => fragment.remove(), 700);
+  };
+  const pulse = () => {
+    tick++;
+    if (tick % 12 === 0 && stage < 3) {
+      stage++;
+      document.body.dataset.eggStage = String(stage);
+    }
+    terminal.textContent = `SCAMLENS / ${String(tick).padStart(4, '0')}  //  ${phrases[Math.floor(Math.random() * phrases.length)]}`;
+    ghost.textContent = phrases[Math.floor(Math.random() * phrases.length)];
+    ghost.style.left = `${Math.max(5, Math.min(innerWidth - 230, pointerX + random(-160, 90)))}px`;
+    ghost.style.top = `${Math.max(10, Math.min(innerHeight - 50, pointerY + random(-100, 80)))}px`;
+    if (!reducedMotion && Math.random() < 0.25 + stage * 0.12) burst();
+    if (!reducedMotion && Math.random() < 0.18 + stage * 0.1) {
+      document.body.classList.add('egg-impact');
+      window.setTimeout(() => document.body.classList.remove('egg-impact'), 120);
+    }
+    document.documentElement.style.setProperty('--egg-shift', `${Math.round(random(-stage * 3, stage * 3))}px`);
+  };
+  pulse();
+  registerEggInterval(pulse, reducedMotion ? 2400 : 650);
+  // O visitante sempre pode sair do modo secreto com Escape.
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') window.location.reload();
+  });
+}
+
+
+// Web 1.0: GIFs decorativos remotos; a página continua funcionando sem eles.
+function startRetroChaos() {
+  const gifs = [
+    'https://upload.wikimedia.org/wikipedia/commons/2/2c/Rotating_earth_%28large%29.gif',
+    'https://upload.wikimedia.org/wikipedia/commons/1/14/Animated-Flag-USA.gif',
+    'https://upload.wikimedia.org/wikipedia/commons/8/89/HD_transparent_picture.gif'
+  ];
+  const labels = ['UNDER CONSTRUCTION', 'WELCOME TO MY HOMEPAGE', '404 REALITY NOT FOUND', 'BEST VIEWED IN 1999', 'YOU ARE VISITOR #000666', 'SIGN MY GUESTBOOK'];
+  const intro = document.querySelector('.main-content');
+  if (intro) {
+    const strip = document.createElement('div');
+    strip.className = 'egg-retro-strip';
+    const title = document.createElement('strong');
+    title.textContent = '★ THE INTERNET IS HAUNTED ★';
+    strip.append(title);
+    for (const src of gifs) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = 'GIF retrô'; img.loading = 'lazy';
+      img.onerror = () => img.remove();
+      strip.append(img);
+    }
+    const ticker = document.createElement('marquee');
+    ticker.textContent = '★ UNDER CONSTRUCTION ★ DO NOT FEED THE WEBMASTER ★ YOUR MODEM IS SCREAMING ★';
+    ticker.setAttribute('scrollamount', '8');
+    strip.append(ticker);
+    intro.prepend(strip);
+  }
+  let visits = 666;
+  const counter = document.createElement('div');
+  counter.className = 'egg-counter';
+  counter.textContent = 'VISITORS: 000666';
+  document.body.append(counter);
+  registerEggInterval(() => { counter.textContent = 'VISITORS: ' + String(++visits).padStart(6, '0'); }, 1200);
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  registerEggInterval(() => {
+    if (document.querySelectorAll('.egg-sticker').length >= 6) return;
+    const el = document.createElement('div');
+    el.className = 'egg-sticker';
+    el.style.left = Math.floor(Math.random() * 85) + 'vw';
+    el.style.top = Math.floor(Math.random() * 80) + 'vh';
+    if (Math.random() < 0.5) {
+      const img = document.createElement('img');
+      img.src = gifs[Math.floor(Math.random() * gifs.length)];
+      img.alt = '';
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain';
+      img.onerror = () => el.remove();
+      el.append(img);
+    } else {
+      el.style.cssText += ';width:180px;height:auto;background:yellow;border:3px ridge red;color:blue;font:bold 16px "Comic Sans MS",serif;padding:5px';
+      el.textContent = labels[Math.floor(Math.random() * labels.length)];
+    }
+    document.body.append(el);
+    window.setTimeout(() => el.remove(), 3200);
+  }, 1100);
+}
+
+function activateEasterEgg() {
+  if (eggActive) return;
+  eggActive = true;
+  try { localStorage.setItem(EGG_STORAGE_KEY, "1"); } catch (_) { /* armazenamento indisponível */ }
+
+  document.body.style.backgroundImage = "url('https://i.pinimg.com/originals/1f/1a/f7/1f1af705467aa7d5df2264d21fc23fe2.gif')";
+  document.body.style.backgroundRepeat = "repeat";
+  document.body.style.backgroundAttachment = "fixed";
+  document.getElementById("version")?.replaceChildren("???????????????????????");
+  document.getElementById("message")?.replaceChildren("Why did you do that?");
+  corruptContent();
+  corruptLinks();
+  decayText(registerEggInterval);
+  startLivingCorruption();
+  startRetroChaos();
+  document.title = "Maybe I'm not doing so well after all.";
+
+  const logo = document.querySelector(".logo-text");
+  if (logo) {
+    logo.textContent = "⟁ᚫ⟁ ::: ░▒▓ ☍☌☍ ▓▒░ ::: ϞϞϞ";
+    logo.href = "https://www.cameronsworld.net/";
+    logo.target = "_blank";
+    logo.rel = "noopener noreferrer";
+  }
+  document.getElementById("desc")?.replaceChildren("You know what I mean?");
+
+  const titles = ["Maybe I'm not doing so well after all.", "scamLens_api", "you left this open.", "don't look away."];
+  let titleIndex = 0;
+  registerEggInterval(() => { document.title = titles[titleIndex++ % titles.length]; }, 900);
+  if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    registerEggInterval(() => { if (Math.random() < 0.25) glitch(); }, 2000);
+  }
+
+  window.setTimeout(() => {
+    const audio = new Audio("/static/Blue_Skies.mp3");
+    audio.volume = 0.2;
+    audio.play().catch(() => { /* autoplay pode ser bloqueado */ });
+  }, 3000);
+}
+
+function setupEasterEgg() {
+  let buffer = [];
+  document.addEventListener("keydown", event => {
+    if (eggActive || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    buffer.push(event.key.length === 1 ? event.key.toLowerCase() : event.key);
+    buffer = buffer.slice(-EGG_SEQUENCE.length);
+    if (EGG_SEQUENCE.every((key, index) => key === buffer[index])) activateEasterEgg();
+  });
+
+  const logo = document.querySelector(".logo-text");
+  if (logo) {
+    let taps = 0;
+    let tapTimer;
+    logo.addEventListener("touchstart", event => {
+      if (eggActive) return;
+      event.preventDefault();
+      taps++;
+      clearTimeout(tapTimer);
+      tapTimer = window.setTimeout(() => { taps = 0; }, 1500);
+      if (taps >= 7) { taps = 0; activateEasterEgg(); }
+    }, { passive: false });
+  }
+
+  let seen = false;
+  try { seen = localStorage.getItem(EGG_STORAGE_KEY) === "1" || localStorage.getItem("seen") === "1"; } catch (_) {}
+  if (seen) {
+    const messages = ["you again?", "strange.", "I remember this window.", "something persisted.", "there you are.", "still here?", "this wasn't here before.", "it kept your session.", "I thought this instance was closed.", "you returned too early.", "...", "the cache survived.", "didn't this end already?", "there is residual activity.", "the observer remembers."];
+    if (Math.random() < 0.65) document.title = messages[Math.floor(Math.random() * messages.length)];
+    showReturnPopup();
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupEasterEgg, { once: true });
+} else {
+  setupEasterEgg();
 }

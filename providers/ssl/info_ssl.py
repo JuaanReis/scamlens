@@ -2,6 +2,7 @@ import ssl
 import socket
 import hashlib
 import logging
+import ipaddress
 from datetime import datetime, timezone
 from providers.ssl.parse_issue_ssl import parse_issuer
 from cryptography import x509
@@ -9,6 +10,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID
 from scamLens import config
+from providers.http.security import address_block_reason
 
 logger = logging.getLogger("scanner.ssl")
 
@@ -49,7 +51,7 @@ def _verify_ocsp(cert_obj: x509.Certificate, issuer_cert_bin: bytes | None = Non
     # Uma requisição HEAD não valida revogação. Não consultar URLs do certificado.
     return None
 
-def get_ssl_cert(structure: dict) -> dict:
+def get_ssl_cert(structure: dict, resolved_ip: str | None = None) -> dict:
     host = structure.get("hostname", "")
 
     if not host:
@@ -57,10 +59,17 @@ def get_ssl_cert(structure: dict) -> dict:
     if structure.get("scheme") != "https":
         return {"enabled": False}
 
+    try:
+        address = ipaddress.ip_address(resolved_ip)
+        if address_block_reason(address):
+            return {"enabled": True, "connection_error": True}
+    except (ValueError, TypeError):
+        return {"enabled": True, "connection_error": True}
+
     ctx = ssl.create_default_context()
 
     try:
-        with socket.create_connection((host, structure.get("port") or 443), timeout=config["tls"]["timeout"]) as sock:
+        with socket.create_connection((str(address), structure.get("port") or 443), timeout=config["tls"]["timeout"]) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
                 cert_bin = ssock.getpeercert(binary_form=True)

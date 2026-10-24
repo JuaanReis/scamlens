@@ -40,7 +40,7 @@ scamlens/
 
 ## Entrypoint e ciclo de vida
 
-Inicializamos a aplicação em `server.py` via `lifespan`. No startup, se `server.logs` estiver habilitado no `config.toml`, os handlers de log de arquivo são plugados nos loggers do uvicorn/fastapi; em seguida o banco é inicializado (`init_db()`) e o admin é garantido (`ensure_admin_exists()`). Não há rotina de shutdown/teardown — o bloco após o `yield` é vazio.
+Inicializamos a aplicação em `server.py` via `lifespan`. Com `[logs].enabled`, o launcher define uma pasta compartilhada pela execução. Cada processo cria uma subpasta `process_<PID>` com seu arquivo JSON de eventos e rotação, além de um `host_info.txt` separado com o cabeçalho de informações da inicialização. No startup, o banco é inicializado (`init_db()`), o admin é garantido (`ensure_admin_exists()`) e o writer de requisições é iniciado. No shutdown, o writer drena seus lotes e fecha sua conexão; a fila de arquivo é esvaziada. O launcher fecha os handlers após o encerramento do Uvicorn e marca a pasta da sessão como concluída para a retenção.
 
 ```python
 @asynccontextmanager
@@ -213,7 +213,7 @@ Resultados são cacheados por `SHA-256` da URL (campo `url_hash UNIQUE` na tabel
 
 ## Middleware de logging
 
-`RequestLoggingMiddleware` (em `api/middleware/logging.py`) só é registrado se `server.logs` estiver habilitado no `config.toml`. Grava em `request_logs`. **Não utilizamos uma tabela `API_LOGS` separada** para contexto de negócio por rota — o único log de requisição é o `request_logs`, e o único outro log estruturado é `admin_audit_log`, que registra ações administrativas (`read_users`, `set_active`, `change_plan`, `read_scans`, `read_logs`, `list_logs`, `read_log`), não uso geral da API por usuários comuns.
+`RequestLoggingMiddleware` (em `api/middleware/logging/logging.py`) é um middleware ASGI registrado quando `[logs].enabled` está ativo. As entradas de arquivo e as linhas de `request_logs` têm filtros independentes e são enviadas a filas limitadas. Threads dedicadas fazem a escrita em blocos e o commit SQLite por lote, com retenção configurável. Respostas 4xx/5xx recebem níveis WARNING/ERROR; falhas sem resposta também são registradas. O outro registro de auditoria é `admin_audit_log`, que registra ações administrativas (`read_users`, `set_active`, `change_plan`, `read_scans`, `read_logs`, `list_logs`, `read_log`).
 
 ---
 

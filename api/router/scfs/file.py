@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sqlite3
-from functools import partial
 from time import perf_counter
 from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
@@ -9,12 +8,14 @@ from api.middleware.auth import get_current_user
 from api.router.scfs.schema.map_error import ErrorResponse
 from api.router.scfs.schema.map_result import AnalyzeResponse, ScanResponse, TargetResponse
 from plugins.scfs import run_engine, Settings
-from providers.database.usage import is_usage_exceeded, increment_usage, PLAN_LIMITS
-from providers.database.quota import is_quota_exceeded, increment_anonymous_count
 from providers.database.history import save_module_scan
 from scamLens import config
 
-router = APIRouter(tags=["scfs"])
+from api.middleware.limiter import RateLimitedRoute
+from api.middleware.quota import ScanQuota
+from api.router.runtime import run_scan
+
+router = APIRouter(route_class=RateLimitedRoute, tags=["scfs"])
 _semaphore = asyncio.Semaphore(config["rate_limit"]["max_concurrent_scans"])
 
 @router.post(
@@ -32,26 +33,12 @@ _semaphore = asyncio.Semaphore(config["rate_limit"]["max_concurrent_scans"])
 async def analyze_file(request: Request, file: UploadFile = File(...)):
     start = perf_counter()
     user = None
-    ip = request.client.host
+    ip = request.client.host if request.client else "unknown"
 
     try:
         user = get_current_user(request)
     except HTTPException:
         pass
-
-    if user is None:
-        if is_quota_exceeded(ip):
-            return JSONResponse(status_code=401, content={
-                "error": "limite de scans anônimos atingido",
-                "detail": "Crie uma conta para continuar usando o scamLens."
-            })
-        
-    elif is_usage_exceeded(user["id"], "scfs", user["plan_name"], is_admin=user.get("is_admin", False)):
-        limit = PLAN_LIMITS.get(user["plan_name"])
-        return JSONResponse(status_code=429, content={
-            "error": "limite diário atingido",
-            "detail": f"Seu plano {user['plan_label']} permite {limit} scans por dia. Faça upgrade para continuar."
-        })
 
     if _semaphore.locked():
         return JSONResponse(status_code=503, content={"error": "servidor ocupado, tente novamente"})
@@ -72,27 +59,23 @@ async def analyze_file(request: Request, file: UploadFile = File(...)):
                 "error": f"Arquivo excede o limite de {settings.max_file_bytes} bytes"
             })
 
-        filename = (file.filename or "sample").replace("\\", "/").rsplit("/", 1)[-1] or "sample"
-        loop = asyncio.get_running_loop()
-        scan, target = await loop.run_in_executor(
-            None, partial(run_engine, data, name=filename, settings=settings)
-        )
-
-    scan["meta"]["scan_time_s"] = round(perf_counter() - start, 3)
-    request.state.scan_id = scan["meta"]["scan_id"]
-    if scan.get("status") == "error":
-        status_code = 415 if scan["error"]["code"] == "unsupported_format" else 400
-        return JSONResponse(status_code=status_code, content=scan)
-
-    result = AnalyzeResponse(scan=ScanResponse(**scan), target=TargetResponse(**target))
-    try:
-        save_module_scan("scfs", result.scan.model_dump(), result.target.model_dump(), user_id=user["id"] if user else None)
-    except sqlite3.Error:
-        logging.getLogger(__name__).exception("Não foi possível salvar o histórico SCFS")
-        return JSONResponse(status_code=503, content={"error": "não foi possível salvar a análise; tente novamente"})
-
-    if user is None:
-        increment_anonymous_count(ip)
-    else:
-        increment_usage(user["id"], "scfs")
-    return result
+        quota = ScanQuota(user, ip, "scfs")
+        if error := quota.reserve():
+            return error
+        with quota:
+            filename = (file.filename or "sample").replace("\\", "/").rsplit("/", 1)[-1] or "sample"
+            scan, target = await run_scan(quota, run_engine, data, name=filename, settings=settings)
+            scan["meta"]["scan_time_s"] = round(perf_counter() - start, 3)
+            request.state.scan_id = scan["meta"]["scan_id"]
+            if scan.get("status") == "error":
+                status_code = 415 if scan["error"]["code"] == "unsupported_format" else 400
+                return JSONResponse(status_code=status_code, content=scan)
+            result = AnalyzeResponse(scan=ScanResponse(**scan), target=TargetResponse(**target))
+            try:
+                save_module_scan("scfs", result.scan.model_dump(), result.target.model_dump(),
+                                 user_id=user["id"] if user else None)
+            except sqlite3.Error:
+                logging.getLogger(__name__).exception("Não foi possível salvar o histórico SCFS")
+                return JSONResponse(status_code=503, content={"error": "não foi possível salvar a análise; tente novamente"})
+            quota.completed = True
+            return result

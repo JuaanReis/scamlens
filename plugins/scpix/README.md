@@ -4,13 +4,14 @@ Módulo offline de avaliação **técnica e contextual** de payloads Pix copia e
 
 ## Instalação
 
-Copie as pastas `plugins/scpix/` e `api/router/scpix/` para a raiz do ScamLens. Execute **uma vez** na raiz:
+O módulo e o roteador já fazem parte deste repositório. Na raiz do ScamLens:
 
 ```bash
-python -m plugins.scpix.install_api
+python -m pip install -e .
+python -m api.server
 ```
 
-Esse comando só acrescenta import e `include_router` ao `api/server.py` original; não altera as demais rotas. É idempotente e aborta quando as âncoras esperadas não existem. Requer Python 3.11+ e as dependências FastAPI/Pydantic já existentes no ScamLens para a API.
+Não é necessário executar um instalador separado. Use o mesmo ambiente Python para instalar e iniciar a API.
 
 ## Engine e CLI
 
@@ -27,10 +28,12 @@ scan, target = run_engine(payload, settings=Settings(disabled_rules=("weak_locat
 ```
 
 ```bash
-python -m plugins.scpix --payload '000201...6304ABCD' --json
-python -m plugins.scpix --file cobranca.txt --json
-python -m plugins.scpix --file cobranca.txt --expected-name 'LOJA EXEMPLO' --expected-amount 35.90
+python -m plugins.scpix.cli.main --payload '000201...6304ABCD' --json
+python -m plugins.scpix.cli.main --file cobranca.txt --json
+python -m plugins.scpix.cli.main --file cobranca.txt --expected-name 'LOJA EXEMPLO' --expected-amount 35.90
 ```
+
+Após instalar este projeto, o comando `scpix` também está disponível. A execução com `python -m plugins.scpix.cli.main` a partir da raiz seleciona esta cópia do código.
 
 O parâmetro `source` aceita `str` (payload literal), `bytes` ou `pathlib.Path` (arquivo). **Não** tenta adivinhar se uma string é caminho. Código de saída CLI: `0` sem anomalias; `1` anomalias detectadas; `2` erro ou avaliação inconclusiva; `130` interrompido.
 

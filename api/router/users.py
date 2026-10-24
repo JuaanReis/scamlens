@@ -9,7 +9,9 @@ from api.router.schema.history_schema import ScanHistoryResponse
 from providers.database.users import update_avatar
 from scamLens import config
 
-router = APIRouter(prefix="/api/user", tags=["users"])
+from api.middleware.limiter import RateLimitedRoute
+
+router = APIRouter(route_class=RateLimitedRoute, prefix="/api/user", tags=["users"])
 
 AVATARS_DIR = Path(config["paths"]["avatar"])
 MAX_SIZE_BYTES = config["uploads"]["avatar_max_bytes"]

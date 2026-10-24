@@ -9,8 +9,9 @@ from scamLens import config
 from providers.database.users import get_user_by_email, create_user, get_user_by_id
 from providers.database.tokens import revoke_token, is_token_revoked
 from scamLens import get_settings
+from api.middleware.limiter import RateLimitedRoute
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(route_class=RateLimitedRoute, prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
 cookie_config = config["cookies"]
@@ -20,6 +21,7 @@ samesite = cookie_config["samesite"]
 httponly = cookie_config["httponly"]
 ttl_minutes = cookie_config["ttl_minutes"]
 ttl_days = cookie_config["ttl_days"]
+dummy_hash = settings.auth_dummy_hash
 
 COOKIE_KWARGS = {"httponly": httponly, "secure": secure, "samesite": samesite}
 
@@ -30,7 +32,6 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TTL = timedelta(minutes=ttl_minutes)
 REFRESH_TTL = timedelta(days=ttl_days)
-_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(rounds=auth_config["bcrypt_rounds"])).decode()
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=auth_config["bcrypt_rounds"])).decode()
@@ -92,7 +93,7 @@ def decode_token(token: str, expected_type: str) -> dict:
 def _revoke_if_valid(token: str | None, expected_type: str) -> None:
     if not token:
         return
-    
+
     try:
         payload = decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") == expected_type:
@@ -118,7 +119,7 @@ def register(body: RegisterBody, response: Response):
 @router.post("/login")
 def login(body: LoginBody, response: Response):
     user = get_user_by_email(body.email)
-    stored_hash = user["password"] if user else _DUMMY_HASH
+    stored_hash = user["password"] if user else dummy_hash
     valid = verify_password(body.password, stored_hash)
 
     if not user or not valid:
@@ -159,7 +160,8 @@ def refresh(response: Response, request: Request):
     jti = payload.get("jti")
     if jti:
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-        revoke_token(jti, expires_at=exp)
+        if not revoke_token(jti, expires_at=exp):
+            raise HTTPException(status_code=401, detail="Refresh token já utilizado")
 
     _set_cookies(response, user_id, remember=remember)
     return {"ok": True}

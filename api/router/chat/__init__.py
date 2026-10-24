@@ -1,4 +1,6 @@
+import asyncio
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 from fastapi import (
     APIRouter, Depends, HTTPException, Query,
     WebSocket, WebSocketDisconnect,
@@ -9,7 +11,9 @@ from api.middleware.auth import get_current_user
 from providers.database.chat_messages import add_message, get_recent_messages
 from scamLens import config
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+from api.middleware.limiter import RateLimitedRoute
+
+router = APIRouter(route_class=RateLimitedRoute, prefix="/api/chat", tags=["chat"])
 chat_config = config["chat"]
 
 class MessageIn(BaseModel):
@@ -31,11 +35,41 @@ class ConnectionManager:
     async def broadcast(self, data: dict):
         for ws in list(self.connections):
             try:
-                await ws.send_json(data)
+                await run_in_threadpool(get_current_user, ws)
+                await asyncio.wait_for(ws.send_json(data), timeout=2.0)
             except Exception:
-                self.disconnect(ws)
+                await self.close(ws)
+
+    async def close(self, ws):
+        self.disconnect(ws)
+        try:
+            await asyncio.wait_for(ws.close(code=1008), timeout=2.0)
+        except Exception:
+            pass
 
 manager = ConnectionManager()
+
+def _origin(value):
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme not in ("http", "https") or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+            return None
+        port = parsed.port
+        return parsed.scheme, parsed.hostname.lower(), port if port is not None else (443 if parsed.scheme == "https" else 80)
+    except ValueError:
+        return None
+
+def _origin_allowed(ws):
+    supplied = ws.headers.get("origin")
+    if supplied is None:
+        return True
+    origin = _origin(supplied)
+    scheme = "https" if ws.url.scheme == "wss" else "http"
+    same_origin = _origin(f"{scheme}://{ws.url.netloc}")
+    allowed = [_origin(value) for value in config["cors"]["allow_origins"] if value != "*"]
+    return origin is not None and (origin == same_origin or origin in allowed)
 
 def _to_utc_iso(dt: datetime) -> str:
     if dt.tzinfo is None:
@@ -71,6 +105,9 @@ async def send_message(body: MessageIn, user: dict = Depends(get_current_user)):
 
 @router.websocket("/ws")
 async def chat_ws(ws: WebSocket):
+    if not _origin_allowed(ws):
+        await ws.close(code=1008)
+        return
     try:
         await run_in_threadpool(get_current_user, ws)
     except HTTPException:
@@ -79,7 +116,19 @@ async def chat_ws(ws: WebSocket):
     await manager.connect(ws)
     try:
         while True:
-            await ws.receive_text()
+            remaining = ws.state.token_expires_at - datetime.now(timezone.utc).timestamp()
+            if remaining <= 0:
+                await manager.close(ws)
+                break
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=min(remaining, 5.0))
+            except asyncio.TimeoutError:
+                pass
+            try:
+                await run_in_threadpool(get_current_user, ws)
+            except HTTPException:
+                await manager.close(ws)
+                break
     except WebSocketDisconnect:
         pass
     finally:

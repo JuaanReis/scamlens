@@ -14,9 +14,9 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "-"
 
 def get_user_agent(request: Request) -> str:
-    ua = request.headers.get("User-Agent", "-")
+    ua = request.headers.get("User-Agent", "-").strip()
 
-    if ua == "-":
+    if not ua or ua == "-":
         return "-"
 
     match = search(

@@ -39,7 +39,7 @@ def _build_identity(ctx: ScanContext) -> dict:
         "punycode": punycode,
         "unicode_domain": unicode_domain,
         "is_idn": is_idn,
-        "is_homograph": False,  
+        "is_homograph": False,
         "is_https": structure.get("scheme", "").lower() == "https",
         "domain_length": structure.get("domain_length", 0),
         "domain_entropy": round(shannon_entropy(registered_domain), 5),
@@ -55,16 +55,16 @@ def _build_network(ctx: ScanContext) -> dict:
     return {
         "ipv4": dns.get("a", []),
         "ipv6": dns.get("aaaa", []),
-        "reverse_dns": None,     
-        "asn": None,              
-        "geo": None,              
-        "isp": None,              
-        "cdn": None,             
-        "waf": None,             
-        "http_version": None,    
+        "reverse_dns": None,
+        "asn": None,
+        "geo": None,
+        "isp": None,
+        "cdn": None,
+        "waf": None,
+        "http_version": None,
         "timings": {
             "total_ms": round(response.elapsed * 1000) if response else None,
-            "dns_ms": None,       
+            "dns_ms": None,
             "tcp_ms": None,
             "tls_ms": None,
             "ttfb_ms": None,
@@ -157,15 +157,15 @@ def _build_http(ctx: ScanContext) -> dict:
         "alt_svc": headers.get("alt-svc"),
         "keep_alive": "keep-alive" in headers.get("connection", "").lower(),
         "security_headers": security_headers,
-        "cookies": None,  
+        "cookies": None,
     }
 
-def _build_content(ctx: ScanContext) -> dict:
+def _build_content(ctx: ScanContext) -> dict | None:
     html = ctx.target.html
     structure = ctx.target.structure
 
     if not html:
-        return {}
+        return None
 
     root = html
 
@@ -384,7 +384,6 @@ def build_scan(ctx: ScanContext, rules_total: int) -> dict:
         "heuristics": ctx.heuristics,
         "insight": insights(ctx.heuristics, ctx.score)
     }
-
 
 def build_response(ctx: ScanContext, rules_total: int) -> tuple[dict, dict]:
     return build_scan(ctx, rules_total), build_target(ctx)

@@ -25,6 +25,8 @@ class ScanMeta:
     threads: int = 1
     start: float = field(default_factory=time)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    resolved_ip: object | None = None
+    resolved_addresses: tuple = ()
 
 @dataclass
 class ScanContext:

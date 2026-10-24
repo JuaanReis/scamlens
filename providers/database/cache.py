@@ -11,6 +11,8 @@ def load_cache(url_hash: str, *, k: int | None = None, score_model: str | None =
     if not cached:
         return None
     scan, target = cached
+    if scan.get("status") != "ok":
+        return None
     k = scanner_config["k"] if k is None else k
     score_model = scanner_config["score_model"] if score_model is None else score_model
     if scan.get("engine", {}).get("version") != __version__:

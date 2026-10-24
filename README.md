@@ -71,12 +71,16 @@ SCAMLENS_ENV=development
 Suba o servidor:
 
 ```bash
-scamlens-api
+python -m api.server
 ```
+
+Execute esse comando na raiz do projeto. Se preferir `scamlens-api`, instale esta cópia no ambiente virtual com `python -m pip install -e .`; o comando global pode apontar para outra instalação.
 
 A API estará disponível em `http://localhost:5300`. Na primeira execução, a conta admin é criada automaticamente a partir de `EMAIL_ADMIN`/`PASSWORD_ADMIN`.
 
 Com `SCAMLENS_ENV=development`, a documentação interativa fica disponível em `/docs` e `/redoc`.
+
+Os logs usam uma pasta por execução e uma subpasta `process_<PID>` para cada processo, contendo um arquivo ativo de eventos e um `host_info.txt` com os dados da inicialização. A gravação ocorre em lotes, com rotação e retenção. Níveis por categoria, filtros de requisições e limites do SQLite são configurados nas seções `[logs]` do `scamLens/config.toml`.
 
 ---
 
@@ -195,7 +199,7 @@ Para a referência completa, veja [docs/usage.md](./docs/USAGE.md).
 
 Análises de arquivos e Pix concluídas pela API são salvas automaticamente em `module_scans`, incluindo resultados parciais. Repetições do mesmo alvo geram registros separados. O banco guarda o resultado estruturado; arquivos enviados, payload Pix bruto, chave completa e token de cobrança dinâmica não são persistidos. Resultados anônimos ficam disponíveis apenas para administradores. Os motores e CLIs de SCFS/SCPIX continuam sem persistência automática.
 
-`GET /api/admin/scans?module=scpix` reúne os módulos; `module` e `user_id` são filtros opcionais. `GET /api/admin/request-logs?module=scpix` permite filtrar por `module`, `scan_id`, `user_id` e `status_code`; QR aparece como `scqr` nos logs e compartilha o histórico de resultados de URL (`scurl`). As métricas de administração e `/api/user/me` incluem arquivos e Pix. O SCIMG ainda não produz análises e não participa desse histórico. Veja [docs/history.md](docs/history.md).
+`GET /api/admin/scans?module=scpix` reúne os módulos; `module` e `user_id` são filtros opcionais. `GET /api/admin/request-logs?module=scpix` permite filtrar por `module`, `scan_id`, `user_id` e `status_code`; QR aparece como `scqr` nos logs e compartilha o histórico de resultados de URL (`scurl`). As métricas de administração e `/api/user/me` incluem arquivos e Pix. O SCIMG ainda não produz análises e não participa desse histórico. Veja [docs/USAGE.md](docs/USAGE.md).
 
 ---
 
@@ -237,3 +241,13 @@ Contribuições são bem-vindas. Para contribuir:
 4. Abra um Pull Request
 
 Para bugs ou sugestões, abra uma [issue](https://github.com/JuaanReis/ScamLens/issues).
+
+## Garantias de execução
+
+O limite por minuto é aplicado por IP, rota e método, por processo da API. A cota diária é reservada atomicamente no SQLite antes da análise e devolvida em erros normais. Cancelar a requisição depois de submeter o motor mantém a cobrança e a vaga ocupada até ele terminar; isso evita análises gratuitas e trabalho solto.
+
+As regras do SCURL são sequenciais, sem executor interno. `max_rule_seconds` é um orçamento cooperativo, conferido antes e depois de cada regra; não interrompe uma função já iniciada. Falha de regra, prazo excedido ou ausência de cobertura válida devolvem erro técnico, sem classificação segura ou cache. `-t/--threads` continua aceito por compatibilidade, mas os metadados informam uma thread.
+
+Cada análise de URL usa cookies próprios. O transporte fixa os endereços DNS aprovados por salto, preserva Host/SNI e a verificação TLS, e não usa proxies de ambiente. Endereços DNS mistos públicos/privados são recusados por padrão.
+
+CORS permite apenas as origens listadas em `cors.allow_origins` (lista vazia por padrão; chamadas da mesma origem continuam funcionando). Para um frontend em outro domínio, configure sua origem exata, incluindo esquema e porta. WebSockets verificam a origem, a expiração e a revogação da sessão antes de transmitir mensagens e durante períodos ociosos.

@@ -33,4 +33,5 @@ def build_result(response) -> HTTPResult:
         size=len(response.content),
         redirects=len(response.history),
         redirect_chain=extract_redirect_chain(response),
+        resolved_ip=response.extensions.get("scamlens_resolved_ip"),
     )
