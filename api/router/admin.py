@@ -175,3 +175,10 @@ def read_log(
         if len(lines) == tail:
             break
     return PlainTextResponse("".join(reversed(lines)))
+
+@router.get("/health/version")
+async def health_version(admin: dict = Depends(__import__("api.middleware.auth", fromlist=["get_current_admin"]).get_current_admin)):
+    from scamLens import __version__
+    return {
+        "version": __version__
+    }

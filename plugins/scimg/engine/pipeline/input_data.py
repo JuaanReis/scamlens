@@ -1,76 +1,33 @@
-from typing import Optional
-from plugins.scimg.models.scan_context import ScanContext
-from plugins.scimg import __version__, config
 from pathlib import Path
-from stat import S_ISBLK, S_ISFIFO, S_ISCHR, S_ISSOCK, S_ISDIR
+from stat import S_ISREG
+from plugins.scimg import config
 
-MAX_FILE_SIZE_BYTES = config["scanner"]["max_file_size_bytes"]
+DEFAULT_LIMIT = 30_000_000
 
-def validate_input(ctx: ScanContext) -> Optional[dict]:
-    data = ctx.source
-    filename_hint = ctx.file_hint
+def error(kind, message):
+    return {"status": "error", "error": {"type": kind, "message": message}}
 
-    if isinstance(data, bytes):
-        return _validate_bytes(data, filename_hint)
-    if isinstance(data, Path):
-        return _validate_path(data)
-
-    return _error(
-        "invalid_type",
-        f"Tipo de entrada não suportado: {type(data).__name__}. Esperado Path ou bytes.",
-    )
-
-def _validate_bytes(data: bytes, filename_hint: Optional[str]) -> Optional[dict]:
-    if len(data) == 0:
-        return _error("empty_input", "Conteúdo vazio.")
-
-    if len(data) > MAX_FILE_SIZE_BYTES:
-        return _error(
-            "size_exceeded",
-            f"Conteúdo excede o limite de {MAX_FILE_SIZE_BYTES} bytes.",
-        )
-
-    if filename_hint is None:
-        return _error(
-            "missing_filename_hint",
-            "filename_hint é obrigatório para entrada em bytes "
-            "(necessário para heurísticos de extensão declarada vs real).",
-        )
-
-    return None
-
-def _validate_path(path: Path) -> Optional[dict]:
+def validate_input(ctx):
+    limit = int(config.get("scanner", {}).get("max_file_size_bytes", DEFAULT_LIMIT))
+    source = ctx.source
+    if type(source) is bytes:
+        if not source:
+            return error("empty_input", "Conteúdo vazio")
+        if len(source) > limit:
+            return error("size_exceeded", "Imagem excede limite de bytes")
+        if not ctx.file_hint:
+            return error("missing_filename_hint", "file_hint é obrigatório para bytes")
+        return None
+    if not isinstance(source, Path):
+        return error("invalid_type", "Esperado pathlib.Path ou bytes")
     try:
-        st = path.stat()
-    except OSError as e:
-        return _error("invalid_path", f"Caminho inválido ou inacessível: {path} ({e})")
-
-    mode = st.st_mode
-    if S_ISFIFO(mode) or S_ISCHR(mode) or S_ISBLK(mode) or S_ISSOCK(mode):
-        return _error("unsupported_file_type", f"Tipo de arquivo não suportado (pipe/device/socket): {path}")
-
-    if S_ISDIR(mode):
-        return _error("is_a_directory", f"Caminho é um diretório, não um arquivo: {path}")
-
-    if st.st_size == 0:
-        return _error("empty_input", f"Arquivo vazio: {path}")
-
-    if st.st_size > MAX_FILE_SIZE_BYTES:
-        return _error(
-            "size_exceeded",
-            f"Arquivo excede o limite de {MAX_FILE_SIZE_BYTES} bytes.",
-        )
-
+        stat = source.stat()
+        if not S_ISREG(stat.st_mode):
+            return error("unsupported_file_type", "Somente arquivos regulares")
+        if stat.st_size == 0:
+            return error("empty_input", "Arquivo vazio")
+        if stat.st_size > limit:
+            return error("size_exceeded", "Imagem excede limite de bytes")
+    except OSError:
+        return error("invalid_path", "Arquivo inacessível")
     return None
-
-def _error(error_type: str, message: str) -> dict:
-    return {
-        "status": "error",
-        "meta": {
-            "version": __version__,
-        },
-        "error": {
-            "type": error_type,
-            "message": message,
-        },
-    }

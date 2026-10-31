@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from plugins.scurl.models.result_base import ResultBase
-from plugins.math.exponential_decay import domain_age_score
+from providers.math.exponential_decay import domain_age_score
 from ..registry import register
 
 @register(name="domain_age", category="server", severity="medium", weight=4.0, tags=["server", "domain", "age"])

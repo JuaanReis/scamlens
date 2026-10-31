@@ -17,7 +17,7 @@ A URL alvo pode ser passada como argumento posicional ou via flag `-u`. Não é 
 | `target` | — | `str` | — | URL alvo (posicional) |
 | `--url` | `-u` | `str` | — | URL alvo (nomeada) |
 | `--verbose` | `-v` | `bool` | `false` | Ativa saída verbosa |
-| `--threads` | `-t` | `int` | `1` | Número de threads do engine |
+| `--threads` | `-t` | `int` | `1` | Compatibilidade; execução sequencial (1) |
 | `--output` | `-o` | `str` | — | Caminho do arquivo de saída JSON. Use `-` para stdout |
 | `--timeout` | `-T` | `float` | `5` | Timeout de rede em segundos |
 | `-k` | — | `int` | `5` | Parâmetro k do pipeline de scoring |
@@ -36,7 +36,7 @@ scurl https://example.com
 # Com flag -u
 scurl -u https://example.com
 
-# Mais threads, timeout maior
+# Flag de compatibilidade e timeout maior
 scurl https://example.com -t 4 -T 10
 
 # Salvar resultado em arquivo JSON
@@ -196,7 +196,7 @@ Estatísticas de execução do pipeline de regras.
 
 | Campo | Descrição |
 |---|---|
-| `Processors` | Número de threads |
+| `Processors` | Uma thread; argumento legado preservado |
 | `Rules Loaded` | Total de regras registradas |
 | `Triggered` | Regras que produziram resultado (não `None`) |
 | `Suppressed` | `Rules Loaded - Triggered` — regras que retornaram `None` |

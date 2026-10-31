@@ -120,45 +120,18 @@ POST /api/auth/logout
 
 ## Pipeline de análise de URL
 
-`POST /api/scurl/analyze/url` roda em `api/router/scurl/url.py`, chamando `plugins.scurl.run_engine()` dentro de um `run_in_executor` (a engine é síncrona) e sob um `asyncio.Semaphore(20)`. Se o semáforo já estiver saturado (`.locked()`), o handler devolve `503` **antes mesmo de tentar adquiri-lo** — ou seja, sob carga alta ele já recusa de cara em vez de enfileirar.
+`POST /api/scurl/analyze/url` valida a entrada, autentica opcionalmente e adquire a vaga do módulo. A cota é reservada atomicamente no SQLite antes do motor. O helper `api/router/runtime.py` coordena um único executor externo; o SCURL executa as regras sequencialmente, sem criar outro pool.
 
 ```
-POST /api/scurl/analyze/url
-      │
-      ▼
-rejeita URL > 100 caracteres (422)
-      │
-      ▼
-tenta autenticar (get_current_user); falha silenciosa → tratado como anônimo
-      │
-      ▼
-anônimo: is_quota_exceeded(ip)      → 401 se estourou (3/dia hardcoded)
-autenticado: is_usage_exceeded(...) → 429 se estourou o limite do plano
-      │
-      ▼
-se semáforo já lotado → 503 imediato
-      │
-      ▼
-run_engine(url, use_cache=...)   → validate_input_qr → validate_url → collect
-                                    → execute_rules → score → build_response
-                                    (a própria engine já persiste o resultado
-                                     via providers.database.cache dentro dela)
-      │
-      ▼
-increment_usage / increment_anonymous_count
-      │
-      ▼
-save_scan() é chamado de novo pelo router (best-effort, com try/except mudo)
-      │
-      ▼
-return AnalyzeResponse
+entrada → rate limit por IP/rota/método → validação/autenticação
+        → vaga do módulo → reserva atômica da cota
+        → run_scan → run_engine → HTTP/TLS com IP aprovado
+        → regras sequenciais → cobertura/score → resposta/histórico
 ```
 
-**Atualmente, a arquitetura foi projetada de forma que:** `scurl` não é stateless em relação ao banco. `plugins/scurl/engine/main.py` importa `providers.database.cache` e chama `persist_scan()` diretamente dentro do próprio `run_engine()`. O router então chama `save_scan()` de novo depois. Atualmente mantemos essa duplicação de persistência por compatibilidade, com intenção de centralizar essa responsabilidade futuramente — pretendemos revisar se é intencional (idempotência via `url_hash UNIQUE`?) ou dívida técnica.
+Erros normais devolvem a reserva. Cancelamentos após submissão mantêm a cobrança e a vaga até o trabalho terminar. Não há transação aberta durante a análise. `max_rule_seconds` é um prazo cooperativo entre chamadas de regras, sem interrupção forçada de uma regra já iniciada. Não há classificação segura sem cobertura numérica válida.
 
-Não utilizamos uma tabela `URL_CACHE` separada: cache e resultado persistido são a mesma linha na tabela `scans` (`url_hash UNIQUE`), consultada por `find_by_hash()`.
-
----
+O cliente HTTP e os cookies pertencem à análise. A camada de transporte fixa o IP por origem, preserva Host/SNI e verificação do certificado, e valida os redirecionamentos. Cache legado do SCURL 2.0.0 é invalidado pela versão 2.0.1.
 
 ## Pipeline de análise de QR code
 

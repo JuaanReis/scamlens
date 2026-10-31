@@ -1,26 +1,16 @@
-from .args import parse_args
-from ..engine.main import run_engine
 from sys import exit
-from json import dumps
+from .args import parse_args
+from .output import print_output
+from plugins.scimg.engine.main import run_engine
 
-def main():
+def main(argv=None):
     try:
-        args = parse_args()
-        result = run_engine(source=args.file, file_hint=args.file.suffix)
-        if isinstance(result, dict):
-            print(dumps(result, ensure_ascii=True))
-            return 2
-        print(dumps({
-            "status": "validated",
-            "file": result.image_name,
-            "size_bytes": result.image_size,
-            "sha256": result.image_hash,
-            "analysis_available": False
-        }, ensure_ascii=True))
-        return 0
-    except Exception as e:
-        print(f"ERROR {e}")
-        return 2
+        args = parse_args(argv)
+        scan = run_engine(args.file, k=args.k, score_model=args.score_model)
+        print_output(scan)
+        return 2 if scan.get("status") == "error" else 0
+    except KeyboardInterrupt:
+        return 130
 
 if __name__ == "__main__":
     exit(main())

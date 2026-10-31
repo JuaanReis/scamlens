@@ -13,6 +13,5 @@ Procfile
 requirements.txt
 .pytest_cache/
 build/
-scimg/
 AGENTS.md
 locust/last-run.json

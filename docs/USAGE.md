@@ -32,7 +32,7 @@ Essas variáveis podem ir num `.env` na raiz — `get_settings()` chama `load_do
 
 ```bash
 pip install -e .
-scamlens-api
+python -m api.server
 ```
 
 Isso chama `run()` em `api/server.py`, que lê `[server]` de `scamLens/config.toml` (`host`, `port`, `workers`, `reload`). Com o `config.toml` do repo, sobe em `0.0.0.0:5300` com reload ativado. Em Windows, `workers` é forçado para `1` independente do config (checagem de `sys.platform == "win32"`).
@@ -229,7 +229,7 @@ Depois de `pip install -e .`, o comando `scurl` fica disponível (`plugins.scurl
 scurl https://exemplo.com
 scurl -u https://exemplo.com          # equivalente, forma explícita
 scurl https://exemplo.com -v          # verbose
-scurl https://exemplo.com -t 4        # 4 threads no coletor
+scurl https://exemplo.com -t 4        # opção legada; o motor executa regras sequenciais
 scurl https://exemplo.com -T 10       # timeout de 10s (NÃO é threads — cuidado, é flag diferente do scurl vs projetos como pepeScraper)
 scurl https://exemplo.com -o resultado.json
 scurl https://exemplo.com -o -        # imprime o JSON no stdout em vez de tabela formatada
@@ -253,7 +253,7 @@ Flags reais (`plugins/scurl/cli/args.py`):
 
 **Cuidado com `-o` para arquivo:** `save_output()` monta o JSON como `{"url": target, **scan}` — ou seja, o dicionário completo do `target` (identidade, rede, TLS, DNS, HTTP, conteúdo) fica salvo sob a chave `"url"`, misturado com os campos do `scan` no nível raiz. Isso é diferente do formato que a API HTTP devolve (`{"scan": {...}, "target": {...}}`), então não assuma que o JSON salvo pelo CLI tem o mesmo shape do `AnalyzeResponse` da API — hoje eles divergem.
 
-Os entry points deste projeto são `scurl`, `scpix` e `scamlens-api`. O Pix também pode ser executado da raiz com `python -m plugins.scpix.cli.main`; SCFS aceita `python -m plugins.scfs`.
+Os entry points deste projeto são `scurl`, `scpix` e `scamlens-api`. O Pix também pode ser executado da raiz com `python -m plugins.scpix.cli.main`; SCFS aceita `python -m plugins.scfs.cli.main`.
 
 ## Análise de arquivos — scfs
 

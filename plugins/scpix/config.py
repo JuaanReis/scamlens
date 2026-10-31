@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from math import isfinite
 
-
 @dataclass(frozen=True)
 class Settings:
-    """Configurações locais; não há arquivo TOML ou inicialização de rede."""
+    """configurações locais não tem arquivo TOML ou inicialização de rede."""
     k: float = 4.0
     max_payload_bytes: int = 8192
     max_payload_chars: int = 4096

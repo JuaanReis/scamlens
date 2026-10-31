@@ -53,7 +53,7 @@ validate_url        → valida schema, normaliza host, extrai estrutura
 collect             → coleta dados externos (HTTP, DNS, SSL, RDAP, Safe Browsing)
       │
       ▼
-execute             → executa todas as heurísticas em paralelo (ThreadPoolExecutor)
+execute             → executa heurísticas sequenciais, com orçamento cooperativo
       │
       ▼
 context_apply       → aplica dependências entre heurísticas (reduce / increase / skip)
@@ -84,7 +84,7 @@ A centralização da coleta evita que múltiplas heurísticas façam requisiçõ
 
 ### execute
 
-Executa todas as heurísticas registradas via `@register` em paralelo usando `ThreadPoolExecutor`. Cada heurística recebe o `ScanContext` como entrada e retorna um `ResultBase`. Heurísticas que retornam `normalized = None` são marcadas como não aplicáveis e excluídas do cálculo de score.
+Executa as heurísticas registradas via `@register` em sequência, sem executor interno. Cada heurística recebe os dados coletados e retorna um `ResultBase`. O orçamento `max_rule_seconds` é verificado antes e depois de cada chamada; uma regra iniciada não é interrompida. Exceções, prazo excedido ou ausência de cobertura efetiva produzem erro técnico. Heurísticas que retornam `normalized = None` são marcadas como não aplicáveis e excluídas do cálculo de score.
 
 ### context_apply
 
@@ -184,7 +184,7 @@ No Vercel, o path deve ser configurado para `/tmp/scurl.db` via variável de amb
 | Componente | Modelo |
 |---|---|
 | Coleta de dados (`collect`) | Síncrono sequencial (cada provider faz I/O uma vez) |
-| Execução de heurísticas (`execute`) | Paralelo via `ThreadPoolExecutor` |
+| Execução de heurísticas (`execute`) | Sequencial, sem executor interno |
 | API REST | Assíncrono via FastAPI/uvicorn com semáforo de 20 scans simultâneos |
 | CLI | Síncrono — o `run_engine` é chamado diretamente |
 

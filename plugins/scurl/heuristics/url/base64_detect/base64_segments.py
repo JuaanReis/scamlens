@@ -1,7 +1,7 @@
 from urllib.parse import unquote
 from .is_base64 import is_base64, is_tracking_id
 from plugins.scurl.models.result_base import ResultBase
-from plugins.math.value_normalizator import minmax
+from providers.math.value_normalizator import minmax
 from ...registry import register
 
 @register(name="base64_segments", category="url", severity="medium", weight=3.0, tags=["url", "base64", "obfuscation"])

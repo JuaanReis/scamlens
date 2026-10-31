@@ -153,7 +153,7 @@ Além da API, o motor de URL pode ser usado diretamente:
 scurl https://exemplo-suspeito.com
 scurl https://exemplo-suspeito.com -v              # verbose
 scurl https://exemplo-suspeito.com -o resultado.json
-scurl https://exemplo-suspeito.com -t 4 -T 10      # 4 threads, timeout 10s
+scurl https://exemplo-suspeito.com -t 4 -T 10      # -t aceito por compatibilidade; timeout 10s
 scurl https://exemplo-suspeito.com -c              # usa cache local
 ```
 
@@ -251,3 +251,5 @@ As regras do SCURL são sequenciais, sem executor interno. `max_rule_seconds` é
 Cada análise de URL usa cookies próprios. O transporte fixa os endereços DNS aprovados por salto, preserva Host/SNI e a verificação TLS, e não usa proxies de ambiente. Endereços DNS mistos públicos/privados são recusados por padrão.
 
 CORS permite apenas as origens listadas em `cors.allow_origins` (lista vazia por padrão; chamadas da mesma origem continuam funcionando). Para um frontend em outro domínio, configure sua origem exata, incluindo esquema e porta. WebSockets verificam a origem, a expiração e a revogação da sessão antes de transmitir mensagens e durante períodos ociosos.
+
+A retenção de logs usa locks por processo em `.locks` para comprovar que a sessão não está ativa. Sessões novas abandonadas podem ser removidas após a margem de inicialização de 60 segundos. Pastas antigas sem metadados de atividade e sessões de outro host são preservadas; sua remoção exige verificação manual. Logs de requisição continuam best effort.

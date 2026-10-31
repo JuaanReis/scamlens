@@ -1,6 +1,5 @@
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 from scamLens import config
 config = config["scimg"]
-
-from .engine.main import run_engine
+from plugins.scimg.engine.main import run_engine

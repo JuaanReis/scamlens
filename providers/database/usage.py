@@ -39,8 +39,9 @@ def reserve_usage(user_id: int, module: str, plan_name: str, is_admin: bool = Fa
     if limit == 0:
         return None
     conn = get_connection()
-    date = conn.execute("SELECT DATE('now')").fetchone()[0]
     with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        date = conn.execute("SELECT DATE('now')").fetchone()[0]
         cursor = conn.execute(
             """INSERT INTO daily_usage (user_id, module, date, count)
                VALUES (?, ?, ?, 1)

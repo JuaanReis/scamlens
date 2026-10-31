@@ -1,8 +1,8 @@
 from ipaddress import ip_address
 from re import findall
-from plugins.math.shannon_entropy import shannon_entropy
+from providers.math.shannon_entropy import shannon_entropy
 from plugins.scurl.models.result_base import ResultBase
-from plugins.math.value_normalizator import minmax, normalize_counter
+from providers.math.value_normalizator import minmax, normalize_counter
 from .parts import looks_like_hash
 from ..registry import register
 

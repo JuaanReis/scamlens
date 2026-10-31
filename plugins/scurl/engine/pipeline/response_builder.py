@@ -1,5 +1,5 @@
 from time import time
-from plugins.math.shannon_entropy import shannon_entropy
+from providers.math.shannon_entropy import shannon_entropy
 from plugins.scurl.models.scan_context import ScanContext
 from plugins.scurl.engine.analysis.insights import insights
 from plugins.scurl import __version__

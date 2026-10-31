@@ -1,9 +1,9 @@
 from plugins.scurl.datasets.keywords.shortener import shorten
 from urllib.parse import parse_qs, unquote
-from plugins.math.jaccard_similarity import similarity_jaccard
-from plugins.math.shannon_entropy import shannon_entropy
+from providers.math.jaccard_similarity import similarity_jaccard
+from providers.math.shannon_entropy import shannon_entropy
 from plugins.scurl.models.result_base import ResultBase
-from plugins.math.value_normalizator import minmax
+from providers.math.value_normalizator import minmax
 from re import IGNORECASE, compile
 from ..registry import register
 

@@ -1,6 +1,6 @@
 from plugins.scurl.models.result_base import ResultBase
 from re import IGNORECASE, compile
-from plugins.math.value_normalizator import normalize_counter
+from providers.math.value_normalizator import normalize_counter
 from ..registry import register
 
 @register(name="hyphen_risk", category="url", severity="medium", weight=2.5, tags=["url", "domain"])

@@ -1,8 +1,8 @@
 from .normalize import normalize_domain
-from plugins.math.levenshtein import levenshtein
-from plugins.math.shannon_entropy import shannon_entropy
+from providers.math.levenshtein import levenshtein
+from providers.math.shannon_entropy import shannon_entropy
 from plugins.scurl.models.result_base import ResultBase
-from plugins.math.value_normalizator import minmax
+from providers.math.value_normalizator import minmax
 
 def detect(domain: str, by_len: dict, max_dist: int = 2) -> ResultBase:
     domain = normalize_domain(domain)

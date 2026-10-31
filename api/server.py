@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from api.logs import LOGS_ENABLED, SESSION_ENV, initialize_logging, start_log_session, flush_logging, shutdown_logging
 from api.middleware.logging.database import start_request_logging, stop_request_logging
-# Spawned workers inherit the launcher session and capture router import failures too.
 if LOGS_ENABLED and os.environ.get(SESSION_ENV):
     initialize_logging(perf_counter() - START)
 from api.middleware.logging.logging import RequestLoggingMiddleware
@@ -22,14 +21,15 @@ from api.router.admin import router as admin_router
 from api.router.auth import router as auth_router
 from api.router.system import router as system_router
 from api.router.users import router as users_router
-from api.router.chat import router as chat_router
-from api.router.scurl.url import router as scurl_analyze_router
-from api.router.scurl.qr import router as scurl_qr_router
-from api.router.scurl.scans import router as scurl_scans_router
-from api.router.scfs.file import router as scfs_analyze_router
-from api.router.scpix.pix import router as scpix_analyze_router
-from api.router.scfs.scans import router as scfs_scans_router
-from api.router.scpix.scans import router as scpix_scans_router
+from api.router.module.chat import router as chat_router
+from api.router.module.scurl.url import router as scurl_analyze_router
+from api.router.module.scurl.qr import router as scurl_qr_router
+from api.router.module.scurl.scans import router as scurl_scans_router
+from api.router.module.scfs.file import router as scfs_analyze_router
+from api.router.module.scpix.pix import router as scpix_analyze_router
+from api.router.module.scfs.scans import router as scfs_scans_router
+from api.router.module.scpix.scans import router as scpix_scans_router
+from api.router.module.scimg.image import router as scimg_analyze_router
 from providers.database.connection import get_connection, init_db
 from providers.database.seed import ensure_admin_exists
 from plugins.scurl.heuristics.registry import get_rules
@@ -104,6 +104,7 @@ app.include_router(scfs_analyze_router, prefix="/api/scfs")
 app.include_router(scpix_analyze_router, prefix="/api/scpix")
 app.include_router(scfs_scans_router, prefix="/api/scfs")
 app.include_router(scpix_scans_router, prefix="/api/scpix")
+app.include_router(scimg_analyze_router, prefix="/api/scimg")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

@@ -3,12 +3,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from scamLens import __version__
-
 from api.middleware.limiter import RateLimitedRoute
 
 router = APIRouter(route_class=RateLimitedRoute)
 _STATIC = Path(__file__).parent.parent / "static"
-
 _INDEX_HTML: str = (_STATIC / "index.html").read_text(encoding="utf-8").replace("{{VERSION}}", __version__)
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -32,11 +30,4 @@ async def health():
         "status": "ok",
         "datetime": datetime.now(timezone.utc),
         "db": db_status,
-    }
-
-@router.get("/health/version")
-async def health_version(admin: dict = Depends(__import__("api.middleware.auth", fromlist=["get_current_admin"]).get_current_admin)):
-    from scamLens import __version__
-    return {
-        "version": __version__
     }
