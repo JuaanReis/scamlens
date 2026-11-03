@@ -5,7 +5,7 @@ workers = 1
 reload = false
 
 [logs]
-enabled = false
+enabled = true
 level = "INFO"
 request_level = "INFO"
 scanner_level = "WARNING"

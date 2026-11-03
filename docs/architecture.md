@@ -1,6 +1,6 @@
 # Arquitetura do ScamLens
 
-O ScamLens disponibiliza uma REST API construída com FastAPI e servida por Uvicorn atrás de um reverse proxy Nginx. A API orquestra o motor `scurl` (análise de URL), que por sua vez incorpora internamente o decoder de QR code (`scqr`, vendorizado), e gerencia autenticação, quotas, cache e logging de requisições.
+O ScamLens disponibiliza uma API construída com FastAPI e servida por Uvicorn. A API orquestra os motores `scurl` (URLs e QR com URL), `scfs` (arquivos), `scpix` (Pix copia e cola) e `scimg` (imagens), além do chat autenticado por HTTP e WebSocket. Autenticação, cotas, histórico e logging ficam na camada da API e nos providers; o cache de análises pertence ao fluxo de URL.
 
 ---
 
@@ -10,31 +10,38 @@ O ScamLens disponibiliza uma REST API construída com FastAPI e servida por Uvic
 scamlens/
 ├── api/
 │   ├── router/
-│   │   ├── auth.py          # /api/auth/* (register, login, logout, refresh)
-│   │   ├── users.py         # /api/user/* (me, avatar)
-│   │   ├── admin.py         # /api/admin/* (metrics, users, scans, logs)
-│   │   ├── system.py        # /, /favicon.ico, /health, /health/version
-│   │   └── scurl/
-│   │       ├── url.py       # POST /analyze/url (montado em /api/scurl)
-│   │       ├── qr.py        # POST /analyze/qr (montado em /api/scurl/qr)
-│   │       └── scans.py     # GET /scans, /scans/{id} (montado em /api/scurl)
+│   │   ├── auth.py          # /api/auth/*
+│   │   ├── users.py         # /api/user/me, /avatar, /scans
+│   │   ├── admin.py         # /api/admin/*, incluindo /health/version
+│   │   ├── system.py        # /, /favicon.ico, /health
+│   │   ├── runtime.py       # coordenação externa de execução dos motores
+│   │   └── module/
+│   │       ├── scurl/       # url.py, qr.py, scans.py e schema/
+│   │       ├── scfs/        # file.py, scans.py e schema/
+│   │       ├── scpix/       # pix.py, scans.py e schema/
+│   │       ├── scimg/       # image.py e schema/; sem histórico
+│   │       └── chat/        # mensagens HTTP e WebSocket
 │   ├── middleware/
-│   │   ├── auth.py          # get_current_user / get_current_admin
-│   │   └── logging.py       # RequestLoggingMiddleware
-│   ├── limiter.py            # instância slowapi
-│   ├── path.py                # STATIC, _STORAGE, LOG_DIR
-│   └── server.py              # monta a app, lifespan, inclui routers
+│   │   ├── auth.py          # autenticação de usuário/admin
+│   │   ├── limiter.py       # rate limit por IP, rota e método
+│   │   ├── quota.py         # reserva e devolução de cota
+│   │   └── logging/         # middleware e persistência de requisições
+│   └── server.py            # app, lifespan e montagem dos routers
 ├── plugins/
-│   ├── math/                 # utilitários compartilhados (levenshtein, entropy, etc.)
-│   ├── scfs/                 # motor de scan de arquivos (CLI + engine próprios, não exposto pela API ainda)
-│   └── scurl/                # motor de análise de URL
-│       └── vendor/scqr/      # decoder de QR code, vendorizado dentro do scurl
-├── providers/                 # I/O externo: HTTP, DNS, RDAP, SSL, SafeBrowsing, banco
+│   ├── scurl/               # análise de URL
+│   │   └── vendor/scqr/     # decoder de QR integrado ao scurl
+│   ├── scfs/                # análise estática de arquivos
+│   ├── scpix/               # análise de BR Code Pix
+│   └── scimg/               # heurísticas experimentais de imagem
+├── providers/
+│   ├── database/            # usuários, cotas, histórico e logs
+│   └── math/                # utilitários matemáticos compartilhados
 └── scamLens/
-    └── config.toml            # configuração da aplicação
+    ├── paths.py             # caminhos compartilhados
+    └── config.toml          # configuração da aplicação
 ```
 
-`plugins/scqr` como motor irmão de `scurl` **não existe** — o scqr vive dentro de `plugins/scurl/vendor/scqr` e é chamado internamente pelo pipeline do scurl, não pela API diretamente. `plugins/scfs` existe e tem CLI e engine próprios, mas nenhuma rota da API o expõe hoje.
+Os routers de negócio ficam em `api/router/module/`, separados dos motores em `plugins/`. O decoder `scqr` vive dentro de `plugins/scurl/vendor/scqr` e é usado pelo SCURL; a API monta sua rota em `/api/scurl/qr`. Arquivos, Pix e imagens possuem routers e motores próprios.
 
 ---
 
@@ -59,17 +66,28 @@ Em produção (`SCAMLENS_ENV=production`), `docs_url`, `openapi_url` e `redoc_ur
 
 ## Rotas
 
-Todas as rotas de negócio vivem sob prefixo `/api`. Não utilizamosm `/analyze`, `/auth` ou `/profile` na raiz — quem tentar chamar assim recebe 404.
+As rotas de negócio usam o prefixo `/api`. `api/server.py` monta os routers de análise e histórico com seus prefixos; o router do chat já declara `/api/chat`.
 
-| Grupo | Prefixo real | Descrição |
-|-------|--------------|-----------|
-| Análise de URL | `POST /api/scurl/analyze/url` | Submissão de URL para análise |
-| Análise de QR | `POST /api/scurl/qr/analyze/qr` | Upload de imagem, extração de URL do QR e análise |
-| Consulta de scans | `GET /api/scurl/scans`, `GET /api/scurl/scans/{id}` | Histórico público de scans |
-| Autenticação | `/api/auth/register`, `/login`, `/logout`, `/refresh` | Não utilizamos endpoint de verificação de e-mail |
-| Usuário | `GET /api/user/me`, `POST /api/user/avatar` | Perfil e avatar do usuário autenticado |
-| Admin | `/api/admin/metrics`, `/users`, `/scans`, `/request-logs`, `/logs`, `/logs/{filename}` | Painel administrativo, tudo com log de auditoria |
-| Sistema | `GET /`, `GET /favicon.ico`, `GET /health`, `GET /health/version` (admin) | Health check e liveness |
+| Grupo | Rotas registradas | Comportamento |
+|-------|-------------------|---------------|
+| URL | `POST /api/scurl/analyze/url` | JSON com URL; autenticação opcional |
+| QR | `POST /api/scurl/qr/analyze/qr` | Upload `file`; somente QR com URL |
+| Arquivos | `POST /api/scfs/analyze/file` | Upload `file`; análise estática, autenticação opcional |
+| Pix | `POST /api/scpix/analyze/pix` | JSON com `payload` e `expected` opcional |
+| Imagens | `POST /api/scimg/analyze/image` | Upload `file`; análise heurística experimental |
+| Histórico URL/QR | `GET /api/scurl/scans`, `GET /api/scurl/scans/{identifier}` | Público; detalhe por ID ou hash da URL |
+| Histórico de arquivos | `GET /api/scfs/scans`, `GET /api/scfs/scans/{scan_id}` | Autenticado; usuário vê seus resultados, admin vê todos |
+| Histórico Pix | `GET /api/scpix/scans`, `GET /api/scpix/scans/{scan_id}` | Autenticado; usuário vê seus resultados, admin vê todos |
+| Histórico do usuário | `GET /api/user/scans` | Somente resultados do usuário; filtro `module` |
+| Chat HTTP | `GET /api/chat/messages`, `POST /api/chat/messages` | Histórico paginado e envio; autenticação obrigatória |
+| Chat em tempo real | `WebSocket /api/chat/ws` | Recebe mensagens após autenticação |
+| Autenticação | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `POST /api/auth/refresh` | Cadastro e sessão |
+| Usuário | `GET /api/user/me`, `POST /api/user/avatar` | Perfil, atividade e avatar |
+| Administração | `/api/admin/metrics`, `/api/admin/users`, `/api/admin/scans`, `/api/admin/request-logs`, `/api/admin/logs` | Conta admin; histórico e filtros dos módulos suportados |
+| Versão | `GET /api/admin/health/version` | Requer admin |
+| Sistema | `GET /`, `GET /favicon.ico`, `GET /health` | Página, ícone e verificação do banco |
+
+O SCIMG ainda não possui rotas de histórico. Os contratos de entrada, exemplos e códigos de resposta estão em [USAGE.md](USAGE.md).
 
 ---
 
@@ -135,7 +153,7 @@ O cliente HTTP e os cookies pertencem à análise. A camada de transporte fixa o
 
 ## Pipeline de análise de QR code
 
-`POST /api/scurl/qr/analyze/qr` (em `api/router/scurl/qr.py`) lê os bytes do upload e chama **o mesmo `plugins.scurl.run_engine()`**, passando os bytes brutos como `source` e `use_cache=False`. Não há validação de magic bytes no nível do router, nem uma pipeline de QR separada da de URL — tudo acontece dentro de `run_engine`, no estágio `validate_input_qr`:
+`POST /api/scurl/qr/analyze/qr` (em `api/router/module/scurl/qr.py`) lê os bytes do upload e chama **o mesmo `plugins.scurl.run_engine()`**, passando os bytes brutos como `source` e `use_cache=False`. Não há validação de magic bytes no nível do router, nem uma pipeline de QR separada da de URL — tudo acontece dentro de `run_engine`, no estágio `validate_input_qr`:
 
 ```
 run_engine(bytes)
@@ -158,9 +176,35 @@ validate_input_qr(source)
 segue o pipeline normal de análise de URL (validate_url → collect → ... )
 ```
 
-**Isso é a divergência mais importante do documento anterior:** o `scqr` de fato classifica múltiplos tipos de payload (pix, email, phone, wifi, contact, calendar, sms, json, text — isso existe no vendor), mas **a integração atual com a API só aceita o tipo `url`**. QR codes de Pix, vCard, Wi-Fi etc. são decodificados e depois **rejeitados com erro**, não analisados. Se o suporte a outros tipos é uma feature planejada, ela não está ligada na API hoje.
+O decoder identifica vários tipos de payload, mas a rota de QR aceita somente `url`. Para analisar um Pix, o cliente deve enviar o BR Code copia e cola como JSON para `POST /api/scpix/analyze/pix`; a rota de QR não encaminha esse conteúdo ao SCPIX.
 
 ---
+
+## Pipelines de arquivos, Pix e imagens
+
+SCFS, SCPIX e SCIMG recebem suas entradas pelos routers em `api/router/module/`. Cada router aplica autenticação opcional, reserva cota e usa `api/router/runtime.py::run_scan` para chamar seu motor. O retorno HTTP de sucesso segue o envelope `{scan, target}`.
+
+| Motor | Entrada e análise | Resultado e persistência |
+|-------|-------------------|--------------------------|
+| SCFS | Bytes e nome do upload; análise estática de PE, ELF, Mach-O e scripts suportados | `ok`, `partial` ou `inconclusive`; resultado salvo em `module_scans` pela API |
+| SCPIX | BR Code em `payload` e referências opcionais em `expected` | `ok`, `partial` ou `inconclusive`; resultado salvo em `module_scans` pela API |
+| SCIMG | Bytes e nome da imagem; decodificação com Pillow, coleta de métricas, heurísticas sequenciais e score | `ok` ou erro técnico; sem gravação no histórico |
+
+SCFS não executa os arquivos recebidos. SCPIX não consulta cobranças dinâmicas nem confirma titularidade de chave. SCIMG aceita JPEG, PNG, WebP, BMP e TIFF com um único quadro e aplica os limites de `[scimg.scanner]`; sua pontuação é experimental e `ai_model.status` permanece `not_implemented`.
+
+Os scanners de arquivos e imagens leem `[scfs.scanner]` e `[scimg.scanner]` em `scamLens/config.toml`. SCPIX usa `plugins/scpix/config.py::Settings`. Cada motor também pode ser chamado pelo entry point correspondente (`scfs`, `scpix`, `scimg`), sem a persistência automática feita pelos routers HTTP.
+
+## Histórico dos módulos
+
+URL e QR compartilham a tabela `scans`, com identificação por ID ou hash da URL. SCFS e SCPIX salvam resultados estruturados em `module_scans`; análises repetidas do mesmo alvo geram registros separados. A aplicação não persiste os arquivos enviados nem o payload Pix bruto.
+
+`GET /api/scfs/scans` e `GET /api/scpix/scans` exigem autenticação, aceitam `limit`, `offset` e `target_hash`, e restringem a leitura ao dono, exceto para admins. Os detalhes usam `/{scan_id}` e retornam `{scan, target}`. Resultados anônimos desses módulos ficam acessíveis apenas a administradores.
+
+`GET /api/user/scans` reúne os resultados do usuário, e `GET /api/admin/scans` permite consulta administrativa com filtro opcional por usuário. O filtro `module` aceita `scurl`, `scfs` e `scpix`. As métricas administrativas e a atividade do perfil usam esses históricos. O uso autenticado de SCIMG é contado em `daily_usage`, mas os resultados não participam de `module_scans`, dessas listas ou das métricas baseadas nelas.
+
+## Chat
+
+`api/router/module/chat/__init__.py` expõe `GET /api/chat/messages`, `POST /api/chat/messages` e `WebSocket /api/chat/ws`. Todas exigem usuário autenticado. O POST persiste conteúdo e horário em `chat_messages` antes do broadcast; o WebSocket recebe os eventos. As conexões em memória são locais ao processo, sem sincronização entre workers. Paginação, formato e exemplos estão em [USAGE.md](USAGE.md#chat).
 
 ## Rate limiting e quotas
 
@@ -168,13 +212,12 @@ Dois níveis independentes, ambos confirmados no código:
 
 **Nível 1 — `slowapi`**, por IP, configurável via `config.toml` (`rate_limit.enabled`, `rate_limit.requests_per_minute`). Se desabilitado, o limite efetivo vira `99999/minute` (na prática, sem limite).
 
-**Nível 2 — quota diária no banco**, com duas fontes de verdade diferentes:
-- Anônimo: `ANONYMOUS_LIMIT = 3`, **hardcoded em `providers/database/quota.py`**, contado por IP em `anonymous_quota`.
-- Autenticado: `PLAN_LIMITS = {"standard": 5, "go_pro": 25, "plus_premium": None}`, **também hardcoded em Python**, em `providers/database/usage.py`, contado por `(user_id, module, date)` em `daily_usage`.
+**Nível 2 — cota diária no banco**, configurada em `scamLens/config.toml`:
 
-A tabela `plans` **não tem coluna de limite** (só `name`, `label`, `price`). Ou seja, mudar o limite de um plano hoje exige editar código e fazer deploy, não é dado de configuração/banco. Se a intenção é permitir configurar isso sem deploy, essa é uma dívida real a resolver.
+- Anônimo: `[quota].anonymous_daily_limit`, atualmente 3, contado por IP em `anonymous_quota` e compartilhado entre análises.
+- Autenticado: `[quota.plans]`, atualmente `standard = 5`, `go_pro = 25` e `plus_premium = -1` (ilimitado), contado por `(user_id, module, date)` em `daily_usage`. URL e QR usam `scurl`; arquivos, Pix e imagens usam `scfs`, `scpix` e `scimg`.
 
-Além disso, `MAX_CONCURRENT_SCANS = 20` limita análises simultâneas via `asyncio.Semaphore`, com verificação de `.locked()` antes de tentar entrar (retorna 503 em vez de enfileirar/esperar).
+Os limites são lidos pelos providers de cota; a tabela `plans` guarda nome, rótulo e preço. Cada scanner usa um `asyncio.Semaphore` com `rate_limit.max_concurrent_scans` (atualmente 20). URL e QR compartilham o mesmo semáforo; SCFS, SCPIX e SCIMG têm semáforos próprios. Uma rota sem vaga retorna `503`.
 
 ---
 
@@ -187,6 +230,8 @@ Resultados são cacheados por `SHA-256` da URL (campo `url_hash UNIQUE` na tabel
 ## Middleware de logging
 
 `RequestLoggingMiddleware` (em `api/middleware/logging/logging.py`) é um middleware ASGI registrado quando `[logs].enabled` está ativo. As entradas de arquivo e as linhas de `request_logs` têm filtros independentes e são enviadas a filas limitadas. Threads dedicadas fazem a escrita em blocos e o commit SQLite por lote, com retenção configurável. Respostas 4xx/5xx recebem níveis WARNING/ERROR; falhas sem resposta também são registradas. O outro registro de auditoria é `admin_audit_log`, que registra ações administrativas (`read_users`, `set_active`, `change_plan`, `read_scans`, `read_logs`, `list_logs`, `read_log`).
+
+O filtro `module` de `GET /api/admin/request-logs` aceita `scurl`, `scqr`, `scfs`, `scpix` e `chat`. A classificação de QR é feita pelo prefixo `/api/scurl/qr`; seus resultados continuam no histórico de URL. SCIMG ainda não tem classificação própria nesse filtro, e `/api/scimg` não está nos prefixos padrão de `[logs.database]`. Logs de requisição e histórico de análises são registros separados.
 
 ---
 
@@ -202,6 +247,8 @@ SQLite, com `init_db()` cuidando de schema + migrações (ordem: schema antes de
 | `users` | conta, hash de senha, `plan_id`, `is_active` — sem `email_verified` |
 | `revoked_tokens` | blocklist de `jti` revogados (access e refresh), com `expires_at` para purga |
 | `scans` | resultado de análise de URL, `url_hash UNIQUE` — funciona como cache e histórico ao mesmo tempo |
+| `module_scans` | resultados estruturados de SCFS e SCPIX, com dono, hash, status e payload `{scan, target}` |
+| `chat_messages` | mensagens da sala comum, remetente e horários |
 | `daily_usage` | contador por `(user_id, module, date)` |
 | `anonymous_quota` | contador por IP |
 | `request_logs` | log de requisições HTTP (IP, endpoint, método, user_id, scan_id, status, timestamp) |

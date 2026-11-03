@@ -1,8 +1,29 @@
 # Uso do ScamLens
 
-Este documento cobre como rodar a API localmente, como chamar cada endpoint (com exemplos reais de `curl`) e como usar o CLI `scurl`. Tudo aqui foi conferido contra o código em `main`, não contra o que estava planejado — se um comportamento parecer estranho, é porque é assim que o código faz hoje, e está marcado como tal.
+Este guia cobre a API, os módulos de análise e seus comandos locais. As rotas abaixo combinam os prefixos registrados em `api/server.py` com os routers de `api/router/module/`.
 
 ---
+
+## Rotas dos módulos
+
+| Método | Rota | Entrada | Autenticação |
+|--------|------|---------|--------------|
+| `POST` | `/api/scurl/analyze/url` | JSON com `url` e `use_cache` opcional | Opcional |
+| `POST` | `/api/scurl/qr/analyze/qr` | Multipart com `file`; QR contendo URL | Opcional |
+| `POST` | `/api/scfs/analyze/file` | Multipart com `file` | Opcional |
+| `POST` | `/api/scpix/analyze/pix` | JSON com `payload` e `expected` opcional | Opcional |
+| `POST` | `/api/scimg/analyze/image` | Multipart com `file` | Opcional |
+| `GET` | `/api/scurl/scans` | Query `limit` e `offset` | Pública |
+| `GET` | `/api/scurl/scans/{identifier}` | ID do scan ou hash da URL | Pública |
+| `GET` | `/api/scfs/scans` | Query `limit`, `offset` e `target_hash` opcional | Obrigatória |
+| `GET` | `/api/scfs/scans/{scan_id}` | ID do scan | Obrigatória |
+| `GET` | `/api/scpix/scans` | Query `limit`, `offset` e `target_hash` opcional | Obrigatória |
+| `GET` | `/api/scpix/scans/{scan_id}` | ID do scan | Obrigatória |
+| `GET` | `/api/chat/messages` | Query `limit` e `before_id` opcional | Obrigatória |
+| `POST` | `/api/chat/messages` | JSON com `content` e `sent_at` | Obrigatória |
+| `WebSocket` | `/api/chat/ws` | Conexão para receber mensagens | Obrigatória |
+
+As análises retornam `{scan, target}` e aceitam cookie `access_token` ou Bearer. A cota anônima por IP é compartilhada; para usuários autenticados, o uso diário é contado por módulo. URL e QR usam a cota de `scurl`. O SCIMG usa a cota de `scimg`, mas ainda não possui histórico persistido. Veja [Histórico e logs](#histórico-e-logs) para permissões e filtros.
 
 ## 1. Rodando a API localmente
 
@@ -118,23 +139,23 @@ curl -X POST http://localhost:5300/api/scurl/analyze/url \
   -d '{"url": "http://exemplo-suspeito.com/login", "use_cache": true}'
 ```
 
-Sem cookies/Bearer, a chamada roda como anônima (limite de 3/dia por IP, hardcoded). Autenticado, o limite vem de `PLAN_LIMITS` (hardcoded em Python, não configurável pelo banco):
+Sem cookies/Bearer, a chamada roda como anônima. Os limites vêm de `[quota]` e `[quota.plans]` em `scamLens/config.toml`; os valores atuais são:
 
 | Plano | Limite diário |
 |-------|---------------|
 | `standard` | 5 |
 | `go_pro` | 25 |
-| `plus_premium` | ilimitado (`None`) |
+| `plus_premium` | ilimitado (`-1`) |
 
 Respostas possíveis:
 - `200` — `AnalyzeResponse` com `scan` (score, risk_level, verdict, heurísticas disparadas, insights) e `target` (identidade, rede, TLS, DNS, HTTP, conteúdo, WHOIS/domínio).
-- `422` — URL com mais de 100 caracteres, ou corpo inválido.
+- `422` — URL acima de `scurl.security.max_url_length` (2048 caracteres na configuração atual), ou corpo inválido.
 - `401` — limite anônimo estourado.
 - `429` — limite diário do plano estourado (autenticado).
-- `503` — servidor com as 20 análises concorrentes já em execução (`MAX_CONCURRENT_SCANS`); ele **não enfileira**, rejeita na hora.
+- `503` — limite de análises concorrentes do scanner atingido (`rate_limit.max_concurrent_scans`, atualmente 20); a rota rejeita a chamada quando não há vaga.
 - `400` — erro interno do motor (`scan.status == "error"`), corpo no formato `ErrorResponse`.
 
-`use_cache: true` só faz efeito se `[cache].enabled = true` no `config.toml` do `scurl` também estiver ligado. Um hit de cache é a mesma linha da tabela `scans` de uma análise anterior (não há cache separado).
+`use_cache: true` só faz efeito se `cache = true` em `[scurl.scanner]` no `scamLens/config.toml`. Um hit reutiliza uma análise da tabela `scans`; não há tabela separada de cache.
 
 ---
 
@@ -214,10 +235,10 @@ curl "http://localhost:5300/api/admin/logs/sl_20261024T170000123456Z_a1b2c3d4/pr
 
 ```bash
 curl http://localhost:5300/health
-curl http://localhost:5300/health/version -b admin_cookies.txt   # requer admin
+curl http://localhost:5300/api/admin/health/version -b admin_cookies.txt   # requer admin
 ```
 
-`/health` não requer autenticação e testa conectividade com o banco (`db: "ok"` ou `"error"`). `/health/version` requer admin e devolve a versão do pacote instalado.
+`/health` não requer autenticação e testa conectividade com o banco (`db: "ok"` ou `"error"`). `/api/admin/health/version` requer admin e devolve a versão atual da aplicação.
 
 ---
 
@@ -253,11 +274,11 @@ Flags reais (`plugins/scurl/cli/args.py`):
 
 **Cuidado com `-o` para arquivo:** `save_output()` monta o JSON como `{"url": target, **scan}` — ou seja, o dicionário completo do `target` (identidade, rede, TLS, DNS, HTTP, conteúdo) fica salvo sob a chave `"url"`, misturado com os campos do `scan` no nível raiz. Isso é diferente do formato que a API HTTP devolve (`{"scan": {...}, "target": {...}}`), então não assuma que o JSON salvo pelo CLI tem o mesmo shape do `AnalyzeResponse` da API — hoje eles divergem.
 
-Os entry points deste projeto são `scurl`, `scpix` e `scamlens-api`. O Pix também pode ser executado da raiz com `python -m plugins.scpix.cli.main`; SCFS aceita `python -m plugins.scfs.cli.main`.
+Os entry points registrados em `pyproject.toml` são `scurl`, `scfs`, `scpix`, `scimg` e `scamlens-api`. Os motores também podem ser executados da raiz com `python -m plugins.<modulo>.cli.main`, substituindo `<modulo>` por `scurl`, `scfs`, `scpix` ou `scimg`.
 
 ## Análise de arquivos — scfs
 
-A rota fica em `api/router/scfs/file.py`, com esquemas de entrada/saída na pasta `schema`, seguindo a organização de `scurl`.
+`POST /api/scfs/analyze/file` fica em `api/router/module/scfs/file.py`, com esquemas de entrada/saída na pasta `schema`, seguindo a organização de `scurl`.
 
 ```powershell
 curl.exe -X POST http://localhost:5300/api/scfs/analyze/file -F "file=@C:/caminho/amostra.exe"
@@ -269,8 +290,99 @@ Os limites vêm de `[scfs.scanner]` em `scamLens/config.toml`: `max_file_size_by
 
 A rota usa a mesma autenticação opcional e as mesmas cotas por plano de `scurl`, com uso diário registrado no módulo `scfs`. A cota anônima por IP é compartilhada com os outros scans. Erros de upload/análise não consomem a cota.
 
-Respostas: `400` para arquivo vazio/corrompido, `401` para cota anônima esgotada, `413` para tamanho excedido, `415` para formato não suportado, `422` para ausência de arquivo, `429` para cota diária/rate limit e `503` para scanner ocupado ou falha ao salvar o histórico. O resultado estruturado é salvo automaticamente; o arquivo enviado não é persistido pela aplicação. Consulte [Histórico e logs](history.md) para listas, detalhes e filtros.
+Respostas: `400` para arquivo vazio/corrompido, `401` para cota anônima esgotada, `413` para tamanho excedido, `415` para formato não suportado, `422` para ausência de arquivo, `429` para cota diária/rate limit e `503` para scanner ocupado ou falha ao salvar o histórico. O resultado estruturado é salvo automaticamente; o arquivo enviado não é persistido pela aplicação. Consulte [Histórico e logs](#histórico-e-logs) para listas, detalhes e filtros.
 
+## Análise de Pix — scpix
+
+`POST /api/scpix/analyze/pix` fica em `api/router/module/scpix/pix.py`. Envie JSON com `payload` contendo o Pix copia e cola completo. O endpoint não recebe imagem de QR code.
+
+Substitua `<BR_CODE_COMPLETO>` pelo BR Code real:
+
+```bash
+curl -X POST http://localhost:5300/api/scpix/analyze/pix \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"payload": "<BR_CODE_COMPLETO>", "expected": {"merchant_name": "LOJA EXEMPLO", "amount": "35.90"}}'
+```
+
+`expected` é opcional e aceita `merchant_name`, `key`, `amount`, `txid` e `location_host`. Todos os valores são strings; use ponto decimal em `amount` e somente o hostname em `location_host`. O nome e a chave informados são referências para comparação com os campos do BR Code.
+
+A entrada aceita até 4096 caracteres e 8192 bytes em UTF-8. Esses limites vêm do schema HTTP e de `plugins/scpix/config.py::Settings`; o módulo não lê uma seção `[scpix]` do TOML.
+
+A resposta `200` usa `{scan, target}`: `scan` traz score, risco, heurísticas e avisos; `target` traz `identity`, `pix` e `verification`. O status pode ser `ok`, `partial` ou `inconclusive`; um resultado inconclusivo mantém score nulo. O motor não efetua pagamento, não consulta cobranças dinâmicas e não confirma a titularidade da chave ou a identidade do recebedor.
+
+Respostas: `400` para BR Code ou referências inválidas, `401` para cota anônima esgotada, `413` para excesso de bytes, `422` para JSON incompatível com o schema, `429` para cota diária/rate limit e `503` para scanner ocupado ou falha ao salvar o histórico. Resultados concluídos são salvos em `module_scans`; erros normais devolvem a reserva de cota.
+
+```bash
+scpix --file cobranca.txt --expected-name 'LOJA EXEMPLO' --expected-amount 35.90
+```
+
+## Análise de imagens — scimg
+
+`POST /api/scimg/analyze/image` fica em `api/router/module/scimg/image.py`. Envie a imagem no campo multipart `file`:
+
+```bash
+curl -X POST http://localhost:5300/api/scimg/analyze/image \
+  -b cookies.txt \
+  -F "file=@imagem.png"
+```
+
+O motor aceita JPEG, PNG, WebP, BMP e TIFF com um único quadro. Imagens animadas ou com múltiplos quadros são recusadas. Cada dimensão original deve ter pelo menos 32 pixels; o total de pixels também precisa respeitar o limite configurado.
+
+Os valores atuais de `scamLens/config.toml` são:
+
+```toml
+[scimg.scanner]
+max_file_size_bytes = 30000000
+max_pixels = 12000000
+sample_side = 160
+k = 5.0
+score_model = "grouped"
+max_rule_seconds = 12.0
+```
+
+`sample_side` limita o lado da amostra de análise e aceita valores de 64 a 384; `k` aceita 0.1 a 20 e `score_model` aceita `grouped` ou `legacy`. `max_rule_seconds` é o orçamento total das heurísticas, conferido entre regras, sem interrupção forçada da regra corrente.
+
+A resposta `200` usa `{scan, target}`. `scan.result` contém score de 0 a 100, risco e veredito (`inconclusive` ou `suspicious`); `scan` também inclui estatísticas, heurísticas, regras não aplicáveis e marcadores de procedência. `target.identity` contém nome, tamanho e SHA-256; `target.image` contém largura, altura e formato. A pontuação é experimental, não uma probabilidade de geração por IA. Metadados podem ser forjados, e `scan.ai_model` informa `status: "not_implemented"` e `probability: null`.
+
+Respostas: `400` para imagem vazia, corrompida, dimensões inválidas, múltiplos quadros ou falha de análise, `401` para cota anônima esgotada, `413` para excesso de bytes, `415` para formato de imagem não suportado, `422` para ausência do campo `file`, `429` para cota diária/rate limit e `503` para scanner ocupado.
+
+O upload é processado em memória pela aplicação. A análise concluída consome cota no módulo `scimg`, mas seu resultado não é salvo no histórico. Não existem rotas `/api/scimg/scans` nesta integração.
+
+```bash
+scimg imagem.png
+scimg -f imagem.png --score-model grouped --k 5
+```
+
+## Histórico e logs
+
+| Método | Rota | Acesso e filtros |
+|--------|------|-----------------|
+| `GET` | `/api/scurl/scans` | Público; `limit` e `offset` |
+| `GET` | `/api/scurl/scans/{identifier}` | Público; ID do scan ou hash da URL |
+| `GET` | `/api/scfs/scans` | Usuário vê seus arquivos; admin vê todos; `limit`, `offset`, `target_hash` |
+| `GET` | `/api/scfs/scans/{scan_id}` | Detalhe do próprio scan ou de qualquer scan para admin |
+| `GET` | `/api/scpix/scans` | Usuário vê seus Pix; admin vê todos; `limit`, `offset`, `target_hash` |
+| `GET` | `/api/scpix/scans/{scan_id}` | Detalhe do próprio scan ou de qualquer scan para admin |
+| `GET` | `/api/user/scans` | Histórico do usuário autenticado; `module`, `limit`, `offset` |
+| `GET` | `/api/admin/scans` | Admin; `module`, `user_id`, `limit`, `offset` |
+| `GET` | `/api/admin/request-logs` | Admin; `module`, `scan_id`, `user_id`, `status_code`, `limit`, `offset` |
+
+As listas de histórico usam `limit` de 1 a 200 (padrão 50) e `offset` a partir de zero. Em SCFS/SCPIX, `target_hash` deve ter 64 caracteres. O detalhe retorna `{scan, target}`; um scan inexistente ou sem permissão retorna `404`.
+
+```bash
+curl "http://localhost:5300/api/scfs/scans?limit=20&offset=0" -b cookies.txt
+curl "http://localhost:5300/api/scfs/scans/<scan_id>" -b cookies.txt
+curl "http://localhost:5300/api/scpix/scans?limit=20&offset=0" -b cookies.txt
+curl "http://localhost:5300/api/scpix/scans/<scan_id>" -b cookies.txt
+curl "http://localhost:5300/api/user/scans?module=scpix" -b cookies.txt
+curl "http://localhost:5300/api/admin/scans?module=scfs" -b admin_cookies.txt
+curl "http://localhost:5300/api/admin/request-logs?module=scpix&status_code=200" -b admin_cookies.txt
+```
+
+O filtro `module` dos históricos aceita `scurl`, `scfs` e `scpix`. QR compartilha o histórico de URL em `scurl`. Arquivos e Pix são salvos automaticamente pela API, inclusive resultados parciais e inconclusivos; repetições criam registros separados. Os arquivos enviados e o payload Pix bruto não são persistidos pela aplicação. Resultados anônimos de SCFS/SCPIX são acessíveis apenas a administradores. Os motores e CLIs desses módulos não salvam histórico automaticamente.
+
+Em `/api/admin/request-logs`, `module` aceita `scurl`, `scqr`, `scfs`, `scpix` e `chat`; a lista usa `limit` de 1 a 500 (padrão 200) e `offset`. A gravação depende de `[logs].enabled`, `[logs.database].enabled` e dos prefixos configurados. SCIMG não integra os históricos, as métricas baseadas neles ou o filtro `module` dos logs; `/api/scimg` também não está nos prefixos padrão dos logs SQLite.
 
 ## Chat
 

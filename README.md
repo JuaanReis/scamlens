@@ -5,7 +5,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.139.0-009688?logo=fastapi)
 ![Version](https://img.shields.io/badge/version-1.5.0-informational)
 
-API de backend modular para análise de URLs e QR codes, com detecção de indicadores de phishing baseada em heurísticas declarativas e coleta multicamada de dados.
+API de backend modular para análise de URLs, QR codes, arquivos, Pix e imagens, com motores heurísticos e chat autenticado.
 
 ---
 
@@ -24,7 +24,7 @@ API de backend modular para análise de URLs e QR codes, com detecção de indic
 
 ## Visão geral
 
-ScamLens analisa URLs e QR codes em busca de padrões maliciosos. O sistema combina um pipeline de coleta em múltiplas camadas (DNS, RDAP, SSL, Safe Browsing, HTTP/HTML) com heurísticas declarativas registradas via `@register` para produzir um score de risco.
+ScamLens reúne os módulos `scurl` (URLs e QR com URL), `scfs` (arquivos), `scpix` (Pix copia e cola) e `scimg` (imagens). A análise de URL combina coleta de DNS, RDAP, SSL, Safe Browsing e HTTP/HTML com heurísticas declarativas registradas via `@register`. Cada motor mantém seu próprio contrato de análise e pontuação.
 
 Pipeline de análise de URL:
 
@@ -32,7 +32,9 @@ Pipeline de análise de URL:
 validate_url → collect → target_structure → context_apply → execute → score → response_builder
 ```
 
-O motor de QR (`scqr`) decodifica a imagem, classifica o tipo de payload e, quando é uma URL, passa pelo mesmo pipeline acima. Outros tipos de payload (Pix, Wi-Fi, vCard, e-mail, etc.) são detectados mas ainda não analisados nesta versão.
+O motor de QR (`scqr`) decodifica a imagem, classifica o tipo de payload e, quando é uma URL, passa pelo mesmo pipeline acima. A rota de QR aceita somente esse tipo; Pix copia e cola tem uma rota própria no `scpix`.
+
+O SCFS faz análise estática de executáveis e scripts sem executá-los. O SCPIX verifica a estrutura e indicadores contextuais do BR Code. O SCIMG aplica heurísticas experimentais de imagem e metadados; sua pontuação não é uma probabilidade de geração por IA, e nenhum modelo de IA está integrado.
 
 ---
 
@@ -145,6 +147,34 @@ curl -X POST http://localhost:5300/api/scurl/qr/analyze/qr \
 
 Aceita JPEG, PNG, WebP, GIF (validado por magic bytes, não por `Content-Type`). O payload extraído do QR deve ser uma URL — outros tipos retornam `400` com `error.type: "unsupported_qr_type"`.
 
+### Analisar um arquivo
+
+```bash
+curl -X POST http://localhost:5300/api/scfs/analyze/file \
+  -F "file=@amostra.exe"
+```
+
+O upload usa o campo multipart `file` e tem limite padrão de 50000000 bytes. A análise não executa o arquivo enviado.
+
+### Analisar um Pix copia e cola
+
+Substitua `<BR_CODE_COMPLETO>` pelo conteúdo completo do Pix. `expected` é opcional e seus valores devem ser strings.
+
+```bash
+curl -X POST http://localhost:5300/api/scpix/analyze/pix \
+  -H "Content-Type: application/json" \
+  -d '{"payload": "<BR_CODE_COMPLETO>", "expected": {"merchant_name": "LOJA EXEMPLO", "amount": "35.90"}}'
+```
+
+### Analisar uma imagem
+
+```bash
+curl -X POST http://localhost:5300/api/scimg/analyze/image \
+  -F "file=@imagem.png"
+```
+
+Aceita JPEG, PNG, WebP, BMP e TIFF com um único quadro. Os limites padrão são 30000000 bytes e 12000000 pixels. A resposta segue o envelope `{scan, target}`, com score experimental, heurísticas e identificação da imagem. Consulte os contratos e erros em [docs/USAGE.md](docs/USAGE.md).
+
 ### CLI
 
 Além da API, o motor de URL pode ser usado diretamente:
@@ -166,6 +196,14 @@ scpix --file cobranca.txt --expected-name 'LOJA EXEMPLO' --expected-amount 35.90
 
 O SCPIX avalia anomalias técnicas e contextuais do BR Code. Cobranças dinâmicas não são consultadas automaticamente. Veja [plugins/scpix/README.md](plugins/scpix/README.md) para formatos de entrada, heurísticas e limites.
 
+Os motores de arquivos e imagens também têm comandos próprios após `pip install -e .`:
+
+```bash
+scfs amostra.exe --json
+scimg imagem.png
+scimg -f imagem.png --score-model grouped --k 5
+```
+
 ---
 
 ## Endpoints
@@ -176,11 +214,12 @@ O SCPIX avalia anomalias técnicas e contextuais do BR Code. Cobranças dinâmic
 | `POST` | `/api/scurl/qr/analyze/qr` | Opcional | Analisa uma imagem com QR code |
 | `POST` | `/api/scfs/analyze/file` | Opcional | Analisa um executável ou script por upload |
 | `POST` | `/api/scpix/analyze/pix` | Opcional | Analisa um Pix copia e cola enviado como JSON (`payload` e `expected` opcional) |
+| `POST` | `/api/scimg/analyze/image` | Opcional | Analisa uma imagem por upload com heurísticas experimentais |
 | `GET` | `/api/chat/messages` | Obrigatória | Lista mensagens do chat com paginação |
 | `POST` | `/api/chat/messages` | Obrigatória | Persiste e transmite uma mensagem |
 | `WebSocket` | `/api/chat/ws` | Obrigatória | Recebe mensagens em tempo real |
 | `GET` | `/api/scurl/scans` | — | Lista histórico público de scans |
-| `GET` | `/api/scurl/scans/{id}` | — | Detalhe de um scan |
+| `GET` | `/api/scurl/scans/{identifier}` | — | Detalhe por ID do scan ou hash da URL |
 | `GET` | `/api/scfs/scans` | Obrigatória | Histórico de arquivos do usuário; admin pode ver todos |
 | `GET` | `/api/scfs/scans/{scan_id}` | Obrigatória | Resultado salvo de análise de arquivo |
 | `GET` | `/api/scpix/scans` | Obrigatória | Histórico Pix do usuário; admin pode ver todos |
@@ -193,13 +232,14 @@ O SCPIX avalia anomalias técnicas e contextuais do BR Code. Cobranças dinâmic
 | `GET` | `/api/user/me` | Cookie | Perfil e atividade do usuário |
 | `POST` | `/api/user/avatar` | Cookie | Upload de avatar (JPEG/PNG/WebP/GIF, 2MB) |
 | `GET` | `/api/admin/*` | Admin | Métricas, usuários, scans, logs |
+| `GET` | `/api/admin/health/version` | Admin | Versão atual da aplicação |
 | `GET` | `/health` | — | Liveness probe (verifica banco) |
 
-Para a referência completa, veja [docs/usage.md](./docs/USAGE.md).
+As análises aceitam autenticação opcional por cookie ou Bearer e aplicam cotas de uso. Para exemplos, parâmetros e erros de cada módulo, veja [docs/USAGE.md](docs/USAGE.md).
 
 Análises de arquivos e Pix concluídas pela API são salvas automaticamente em `module_scans`, incluindo resultados parciais. Repetições do mesmo alvo geram registros separados. O banco guarda o resultado estruturado; arquivos enviados, payload Pix bruto, chave completa e token de cobrança dinâmica não são persistidos. Resultados anônimos ficam disponíveis apenas para administradores. Os motores e CLIs de SCFS/SCPIX continuam sem persistência automática.
 
-`GET /api/admin/scans?module=scpix` reúne os módulos; `module` e `user_id` são filtros opcionais. `GET /api/admin/request-logs?module=scpix` permite filtrar por `module`, `scan_id`, `user_id` e `status_code`; QR aparece como `scqr` nos logs e compartilha o histórico de resultados de URL (`scurl`). As métricas de administração e `/api/user/me` incluem arquivos e Pix. O SCIMG ainda não produz análises e não participa desse histórico. Veja [docs/USAGE.md](docs/USAGE.md).
+`GET /api/admin/scans?module=scpix` reúne os históricos de `scurl`, `scfs` e `scpix`; `module` e `user_id` são filtros opcionais. `GET /api/admin/request-logs?module=scpix` permite filtrar por `module`, `scan_id`, `user_id` e `status_code`; QR aparece como `scqr` nos logs e compartilha o histórico de resultados de URL (`scurl`). As métricas de administração e `/api/user/me` incluem arquivos e Pix. O SCIMG já produz análises e consome cota no módulo `scimg`, mas não salva resultados no histórico nem oferece rotas `/scans` ou filtro de logs `module=scimg`. Veja [Histórico e logs](docs/USAGE.md#histórico-e-logs).
 
 ---
 
